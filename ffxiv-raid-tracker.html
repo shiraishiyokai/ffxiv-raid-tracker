@@ -743,11 +743,11 @@ const ICONS = {
 };
 
 const SYNC_INTERVAL = 15000;
+const MEMBER_SYNC_INTERVAL = 120000; // 队员轮询间隔 2 分钟（raw 源慢）
 const GITHUB_REPO = 'shiraishiyokai/ffxiv-raid-tracker';
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_RAW = 'https://raw.githubusercontent.com';
-const JSDELIVR_CDN = 'https://cdn.jsdelivr.net/gh';
-const FETCH_TIMEOUT = 10000; // 10秒超时
+const FETCH_TIMEOUT = 20000; // 20秒超时（raw 可能慢）
 
 const ROLES = {
   MT:  { role: 'tank',   icon: '🛡️', iconImg: ICONS.MT, label: 'MT', fullLabel: '绝枪战士 GNB' },
@@ -1020,25 +1020,20 @@ async function syncToCloud() {
 }
 
 function githubRawUrl() {
-  // jsDelivr CDN（有国内节点，速度快）
-  return `${JSDELIVR_CDN}/${GITHUB_REPO}@main/${getTeamDataPath()}`;
-}
-
-function githubRawFallbackUrl() {
-  // raw.githubusercontent.com（慢但永远最新，作为备用）
+  // raw.githubusercontent.com（永远最新，队员用）
   return `${GITHUB_RAW}/${GITHUB_REPO}/main/${getTeamDataPath()}`;
 }
 
 function purgeJsDelivrCache() {
-  // 写入成功后刷新 jsDelivr CDN 缓存，确保队员读取到最新数据
+  // 写入后刷新 jsDelivr CDN，仅作为辅助加速
   const path = getTeamDataPath();
   const purgeUrl = `https://purge.jsdelivr.net/gh/${GITHUB_REPO}@main/${path}`;
   fetch(purgeUrl).catch(() => {});
 }
 
 // 从单个 URL 尝试读取云端数据
-async function tryFetchCloudData(url, signal) {
-  const resp = await fetch(url, { signal });
+async function tryFetchCloudData(url, headers, signal) {
+  const resp = await fetch(url, { headers: headers || {}, signal });
   if (resp.status === 404) return null;
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const content = await resp.json();
@@ -1048,52 +1043,42 @@ async function tryFetchCloudData(url, signal) {
 
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
-  // 写入冷却期内跳过云端读取，防止 CDN 旧缓存覆盖新数据
+  // 写入冷却期内跳过云端读取
   if (Date.now() - lastWriteTime < 30000) return false;
 
-  // 同时发起两个请求，用最新的数据
-  let jsDelivrData = null;
-  let rawData = null;
-
-  // 并行请求两个源
-  const fetchJsDelivr = async () => {
-    try {
-      const c = new AbortController();
-      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
-      const data = await tryFetchCloudData(githubRawUrl(), c.signal);
-      clearTimeout(t);
-      return data;
-    } catch (e) { return null; }
-  };
-
-  const fetchRaw = async () => {
-    try {
-      const c = new AbortController();
-      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
-      const data = await tryFetchCloudData(githubRawFallbackUrl(), c.signal);
-      clearTimeout(t);
-      return data;
-    } catch (e) { return null; }
-  };
-
-  [jsDelivrData, rawData] = await Promise.all([fetchJsDelivr(), fetchRaw()]);
-
-  // 两个源都拿到数据时，用更新的那个
   let content = null;
   let source = '';
-  if (jsDelivrData && rawData) {
-    const cdnTime = jsDelivrData.lastModified || 0;
-    const rawTime = rawData.lastModified || 0;
-    if (rawTime > cdnTime) {
-      content = rawData;
-      source = 'raw(更新)';
-    } else {
-      content = jsDelivrData;
-      source = 'jsDelivr';
+
+  if (githubToken) {
+    // 队长：走 GitHub API 读取（永远最新，有 token 无速率限制问题）
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
+      const resp = await fetch(githubApiUrl(), { headers: githubHeaders(true), signal: c.signal });
+      clearTimeout(t);
+      if (resp.ok) {
+        const data = await resp.json();
+        const raw = atob(data.content);
+        content = JSON.parse(raw);
+        cloudFileSha = data.sha; // 顺便更新 SHA
+        source = 'GitHub API';
+      }
+    } catch (e) {
+      console.warn('[fetchFromCloud] GitHub API 读取失败:', e.message);
     }
-  } else {
-    content = jsDelivrData || rawData;
-    source = jsDelivrData ? 'jsDelivr' : (rawData ? 'raw' : '');
+  }
+
+  if (!content) {
+    // 队员或队长 API 失败：走 raw.githubusercontent.com（慢但永远最新）
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), 20000); // raw 给 20 秒超时
+      content = await tryFetchCloudData(githubRawUrl(), null, c.signal);
+      clearTimeout(t);
+      if (content) source = 'raw.githubusercontent.com';
+    } catch (e) {
+      console.warn('[fetchFromCloud] raw 读取也失败:', e.message);
+    }
   }
 
   if (!content) return false;
@@ -1143,6 +1128,8 @@ let lastWriteTime = 0; // 上次写入时间，防止轮询覆盖
 
 function startSyncTimer() {
   stopSyncTimer();
+  // 队长用短间隔（GitHub API 快），队员用长间隔（raw 源慢）
+  const interval = githubToken ? SYNC_INTERVAL : MEMBER_SYNC_INTERVAL;
   syncTimer = setInterval(() => {
     // 写入后 30 秒内跳过轮询，避免 CDN 旧缓存覆盖新数据
     if (cloudConnected && state.teamId && Date.now() - lastWriteTime > 30000) {
