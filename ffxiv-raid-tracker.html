@@ -589,8 +589,23 @@ body.member-mode .captain-only { display: none !important; }
     <span id="connActions">
       <button id="copyBlobIdBtn" class="btn btn-small captain-only" style="display:none;">📋 复制分享链接</button>
       <button id="disconnectBtn" class="btn btn-small btn-danger captain-only" style="display:none;">断开</button>
-      <a id="tokenHelpLink" class="btn btn-small" href="https://github.com/settings/tokens/new?description=FFXIV-Raid-Tracker&scopes=repo" target="_blank" rel="noopener" style="display:none;">🔑 生成Token</a>
     </span>
+  </div>
+
+  <!-- Token Setup (captain only, shown when no token) -->
+  <div id="tokenSetup" class="card captain-only" hidden>
+    <h2>🔑 首次使用 — 设置编辑权限</h2>
+    <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:12px;">
+      队长需要 GitHub Token 才能在线编辑数据。只需设置一次，之后自动生效。
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <a class="btn btn-primary" href="https://github.com/settings/tokens/new?description=FFXIV-Raid-Tracker&scopes=repo" target="_blank" rel="noopener">1️⃣ 点击生成 Token</a>
+      <input type="text" id="tokenInput" placeholder="粘贴 Token (ghp_...)" style="flex:1;min-width:200px;padding:6px 10px;border-radius:5px;background:var(--bg-input);color:var(--text-primary);border:1px solid var(--border-color);font-size:0.85rem;">
+      <button id="tokenSubmitBtn" class="btn btn-primary">2️⃣ 确认连接</button>
+    </div>
+    <p style="color:var(--text-muted);font-size:0.72rem;margin-top:8px;">
+      生成时勾选 <b>repo</b> 权限 → 复制 ghp_ 开头的 token → 粘贴到上方输入框 → 点击确认
+    </p>
   </div>
 
   <!-- Quick Record Bar -->
@@ -1051,21 +1066,21 @@ function renderConnectionBar() {
   const blobIdDisplay = document.getElementById('blobIdDisplay');
   const copyBtn = document.getElementById('copyBlobIdBtn');
   const disconnectBtn = document.getElementById('disconnectBtn');
-  const tokenLink = document.getElementById('tokenHelpLink');
+  const tokenSetup = document.getElementById('tokenSetup');
 
   if (state.teamId && cloudConnected) {
     blobIdDisplay.textContent = (state.teamName || state.teamId);
     if (isCaptain()) {
       copyBtn.style.display = '';
       disconnectBtn.style.display = '';
-      if (tokenLink) tokenLink.style.display = 'none';
     }
+    if (tokenSetup) tokenSetup.hidden = true;
   } else {
     blobIdDisplay.textContent = '';
     copyBtn.style.display = 'none';
     disconnectBtn.style.display = 'none';
-    // Show token help for captain without connection
-    if (isCaptain() && tokenLink) tokenLink.style.display = '';
+    // Show token setup for captain without connection
+    if (isCaptain() && !githubToken && tokenSetup) tokenSetup.hidden = false;
   }
 }
 
@@ -1369,6 +1384,46 @@ function submitQuickRecord() {
 // --- Connection bar ---
 document.getElementById('copyBlobIdBtn').addEventListener('click', copyBlobId);
 document.getElementById('disconnectBtn').addEventListener('click', disconnectCloud);
+
+// Token setup
+document.getElementById('tokenSubmitBtn').addEventListener('click', async function() {
+  const token = document.getElementById('tokenInput').value.trim();
+  if (!token || !token.startsWith('ghp_')) {
+    showToast('❌ Token 格式不正确，应以 ghp_ 开头', 'error');
+    return;
+  }
+  githubToken = token;
+  // Generate team ID if not exists
+  if (!state.teamId) {
+    state.teamId = 'team-' + Date.now().toString(36);
+    if (!state.teamName) state.teamName = '我的队伍';
+  }
+  saveLocal();
+  // Try to create/update the data file on GitHub
+  setConnStatus('syncing', '连接中...');
+  renderConnectionBar();
+  try {
+    await syncToCloud();
+    cloudConnected = true;
+    // Update URL to include params
+    const url = new URL(window.location);
+    url.searchParams.set('team', state.teamId);
+    url.searchParams.set('token', githubToken);
+    window.history.replaceState({}, '', url);
+    setConnStatus('online', '');
+    startSyncTimer();
+    showToast('✅ 连接成功！点击「📋 复制分享链接」发给队员', 'success');
+  } catch (e) {
+    setConnStatus('local', '');
+    showToast('❌ 连接失败，请检查 Token 是否正确', 'error');
+  }
+  renderConnectionBar();
+  renderAll();
+});
+
+document.getElementById('tokenInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') document.getElementById('tokenSubmitBtn').click();
+});
 
 async function copyBlobId() {
   if (!state.teamId) return;
