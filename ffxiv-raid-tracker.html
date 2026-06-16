@@ -980,10 +980,14 @@ async function syncToCloud() {
     saveLocal();
     console.log('[syncToCloud] 上传数据，lastModified:', new Date(state.lastModified).toLocaleString(), '天数:', Object.keys(state.days).length);
 
-    // state 中不含 token，直接序列化上传
+    // base64 编码（正确处理 UTF-8 中文）
+    const jsonStr = JSON.stringify(state);
+    const bytes = new TextEncoder().encode(jsonStr);
+    const base64 = btoa(String.fromCharCode(...bytes));
+
     const body = {
       message: `update ${getTeamDataPath()}`,
-      content: btoa(unescape(encodeURIComponent(JSON.stringify(state)))),
+      content: base64,
     };
     if (cloudFileSha) body.sha = cloudFileSha;
 
