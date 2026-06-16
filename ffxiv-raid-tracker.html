@@ -1880,54 +1880,61 @@ async function init() {
 
   applyRole();
 
+  // Render immediately — don't block on network
+  activeDate = todayISO();
+  renderAll();
+
+  // Cloud connection — async, non-blocking
   if (state.teamId) {
-    // Have team ID — connect and fetch data from GitHub
-    cloudConnected = true;
-    lastCloudFetch = '';
     setConnStatus('syncing', '同步中...');
     renderConnectionBar();
-    try {
-      const changed = await fetchFromCloud(false);
+    fetchFromCloud(false).then(changed => {
       if (changed) showToast('📥 已从云端同步最新数据', 'info');
-      setConnStatus('online', '');
-    } catch (e) {
-      setConnStatus('offline', '');
-      showToast('⚠️ 云端连接失败，使用本地数据', 'error');
-    }
-    startSyncTimer();
-  } else if (isCaptain()) {
-    // Captain with no team — generate a team ID, create data file
-    state.teamId = 'team-' + Date.now().toString(36);
-    if (!state.teamName) state.teamName = '我的队伍';
-    saveLocal();
-    // First write to GitHub to create the file
-    if (githubToken) {
-      setConnStatus('syncing', '创建记录本...');
-      renderConnectionBar();
-      await syncToCloud();
       cloudConnected = true;
       setConnStatus('online', '');
+      renderConnectionBar();
       startSyncTimer();
-      // Update URL
-      const url = new URL(window.location);
-      url.searchParams.set('team', state.teamId);
-      url.searchParams.set('token', githubToken);
-      window.history.replaceState({}, '', url);
-      showToast('✅ 在线记录本已创建！点击「📋 复制分享链接」发给队员', 'success');
-    } else {
-      // No token — local only, captain needs to set token
+    }).catch(e => {
+      setConnStatus('offline', '');
+      renderConnectionBar();
+      showToast('⚠️ 云端连接失败，使用本地数据', 'error');
+    });
+  } else if (isCaptain()) {
+    // Captain with no team — show token setup, don't auto-create
+    if (!githubToken) {
       setConnStatus('local', '');
-      showToast('⚠️ 未检测到编辑权限，当前为本地模式。请使用带 token 的队长链接', 'info');
+      renderConnectionBar();
+      // Token setup card is shown via renderConnectionBar
+    } else {
+      // Has token but no team — auto create
+      state.teamId = 'team-' + Date.now().toString(36);
+      if (!state.teamName) state.teamName = '我的队伍';
+      saveLocal();
+      setConnStatus('syncing', '创建记录本...');
+      renderConnectionBar();
+      syncToCloud().then(() => {
+        cloudConnected = true;
+        setConnStatus('online', '');
+        renderConnectionBar();
+        startSyncTimer();
+        const url = new URL(window.location);
+        url.searchParams.set('team', state.teamId);
+        url.searchParams.set('token', githubToken);
+        window.history.replaceState({}, '', url);
+        showToast('✅ 在线记录本已创建！点击「📋 复制分享链接」发给队员', 'success');
+      }).catch(e => {
+        setConnStatus('local', '');
+        renderConnectionBar();
+        showToast('❌ 创建失败: ' + e.message, 'error');
+      });
     }
   } else {
     // Member with no team
     setConnStatus('local', '');
+    renderConnectionBar();
     showToast('⚠️ 未检测到队伍，请使用队长分享的链接打开', 'info');
   }
-
-  renderConnectionBar();
-  activeDate = todayISO();
-  renderAll();
+}
 }
 
 // Listen for hash changes
