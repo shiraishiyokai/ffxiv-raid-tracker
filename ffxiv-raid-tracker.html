@@ -1050,64 +1050,62 @@ async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
   // 写入冷却期内跳过云端读取，防止 CDN 旧缓存覆盖新数据
   if (Date.now() - lastWriteTime < 30000) return false;
+
+  // 先尝试 jsDelivr CDN（国内快），失败则回退到 raw.githubusercontent.com（慢但最新）
+  let content = null;
+  let source = '';
+
+  // 尝试 jsDelivr
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-
-    // 先尝试 jsDelivr CDN（国内快），失败则回退到 raw.githubusercontent.com（慢但最新）
-    let content = null;
-    let source = '';
-    try {
-      content = await tryFetchCloudData(githubRawUrl(), controller.signal);
-      source = 'jsDelivr';
-    } catch (e) {
-      console.log('[fetchFromCloud] jsDelivr 失败，尝试 raw.githubusercontent.com');
-      // 重新创建 AbortController，因为之前的可能已经 abort
-      const controller2 = new AbortController();
-      const timeoutId2 = setTimeout(() => controller2.abort(), FETCH_TIMEOUT);
-      try {
-        content = await tryFetchCloudData(githubRawFallbackUrl(), controller2.signal);
-        source = 'raw.githubusercontent.com';
-      } catch (e2) {
-        console.warn('[fetchFromCloud] 备用源也失败:', e2.message);
-      } finally {
-        clearTimeout(timeoutId2);
-      }
-    } finally {
-      clearTimeout(timeoutId);
-    }
-
-    if (!content) return false;
-    // 时间戳保护：云端数据比本地旧则不覆盖
-    const cloudTime = content.lastModified || 0;
-    const localTime = state.lastModified || 0;
-    console.log('[fetchFromCloud] 来源:', source, '云端 lastModified:', new Date(cloudTime).toLocaleString(), '本地 lastModified:', new Date(localTime).toLocaleString());
-    if (cloudTime < localTime) {
-      console.log('[fetchFromCloud] 云端数据比本地旧，跳过覆盖');
-      return false;
-    }
-    const cloudStr = JSON.stringify(content);
-    if (cloudStr !== lastCloudFetch) {
-      console.log('[fetchFromCloud] 云端数据有变化，覆盖本地');
-      const localPresets = state.mistakePresets;
-      const localTeamId = state.teamId;
-      const localTeamName = state.teamName;
-      state = content;
-      if (!state.mistakePresets) state.mistakePresets = localPresets;
-      state.teamId = localTeamId;
-      state.teamName = localTeamName;
-      saveLocal();
-      lastCloudFetch = cloudStr;
-      if (!silent) renderAll();
-      return true;
-      }
-    }
-    lastCloudFetch = JSON.stringify(state);
-    return false;
+    const c1 = new AbortController();
+    const t1 = setTimeout(() => c1.abort(), FETCH_TIMEOUT);
+    content = await tryFetchCloudData(githubRawUrl(), c1.signal);
+    clearTimeout(t1);
+    if (content) source = 'jsDelivr';
   } catch (e) {
-    console.warn('Cloud fetch failed:', e);
+    console.log('[fetchFromCloud] jsDelivr 失败，尝试备用源');
+  }
+
+  // jsDelivr 失败，尝试 raw.githubusercontent.com
+  if (!content) {
+    try {
+      const c2 = new AbortController();
+      const t2 = setTimeout(() => c2.abort(), FETCH_TIMEOUT);
+      content = await tryFetchCloudData(githubRawFallbackUrl(), c2.signal);
+      clearTimeout(t2);
+      if (content) source = 'raw.githubusercontent.com';
+    } catch (e2) {
+      console.warn('[fetchFromCloud] 备用源也失败:', e2.message);
+    }
+  }
+
+  if (!content) return false;
+
+  // 时间戳保护：云端数据比本地旧则不覆盖
+  const cloudTime = content.lastModified || 0;
+  const localTime = state.lastModified || 0;
+  console.log('[fetchFromCloud] 来源:', source, '云端 lastModified:', new Date(cloudTime).toLocaleString(), '本地 lastModified:', new Date(localTime).toLocaleString());
+  if (cloudTime < localTime) {
+    console.log('[fetchFromCloud] 云端数据比本地旧，跳过覆盖');
     return false;
   }
+  const cloudStr = JSON.stringify(content);
+  if (cloudStr !== lastCloudFetch) {
+    console.log('[fetchFromCloud] 云端数据有变化，覆盖本地');
+    const localPresets = state.mistakePresets;
+    const localTeamId = state.teamId;
+    const localTeamName = state.teamName;
+    state = content;
+    if (!state.mistakePresets) state.mistakePresets = localPresets;
+    state.teamId = localTeamId;
+    state.teamName = localTeamName;
+    saveLocal();
+    lastCloudFetch = cloudStr;
+    if (!silent) renderAll();
+    return true;
+  }
+  lastCloudFetch = JSON.stringify(state);
+  return false;
 }
 
 function disconnectCloud() {
