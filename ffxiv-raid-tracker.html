@@ -862,8 +862,16 @@ function loadState() {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.version >= 1 && parsed.days && parsed.memberNames) {
         state = parsed;
-        // migration
+        // migration for new fields
         if (!state.mistakePresets) state.mistakePresets = [...DEFAULT_PRESETS];
+        if (!state.teamId) state.teamId = '';
+        if (!state.teamName) state.teamName = '';
+        if (!state.token) state.token = '';
+        // migrate old blobId to teamId if needed
+        if (!state.teamId && state.blobId) {
+          state.teamId = state.blobId;
+          delete state.blobId;
+        }
         for (const day of Object.values(state.days)) {
           for (const key of Object.keys(ROLES)) {
             if (!day.members[key]) day.members[key] = { mistakes: [] };
@@ -1903,9 +1911,16 @@ async function init() {
       renderConnectionBar();
       startSyncTimer();
     }).catch(e => {
-      setConnStatus('offline', '');
+      // Fetch failed but we still have teamId + token, mark online for writes
+      if (githubToken) {
+        cloudConnected = true;
+        setConnStatus('online', '');
+      } else {
+        setConnStatus('offline', '');
+      }
       renderConnectionBar();
-      showToast('⚠️ 云端连接失败，使用本地数据', 'error');
+      startSyncTimer();
+      if (!githubToken) showToast('⚠️ 云端连接失败，使用本地数据', 'error');
     });
   } else if (isCaptain()) {
     // Captain with no team — show token setup, don't auto-create
