@@ -969,9 +969,12 @@ async function syncToCloud() {
     saveLocal();
     console.log('[syncToCloud] 上传数据，lastModified:', new Date(state.lastModified).toLocaleString(), '天数:', Object.keys(state.days).length);
 
+    // 构建上传数据：去掉 token（GitHub 不能存 token，会被安全扫描拦截）
+    const uploadData = { ...state };
+    delete uploadData.token;
     const body = {
       message: `update ${getTeamDataPath()}`,
-      content: btoa(unescape(encodeURIComponent(JSON.stringify(state)))),
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(uploadData)))),
     };
     if (cloudFileSha) body.sha = cloudFileSha;
 
@@ -983,7 +986,7 @@ async function syncToCloud() {
     if (resp.ok) {
       const data = await resp.json();
       cloudFileSha = data.content.sha;
-      lastCloudFetch = JSON.stringify(state);
+      lastCloudFetch = JSON.stringify(uploadData); // 用不含 token 的数据做比较
       lastWriteTime = Date.now(); // 记录写入时间，防止轮询覆盖
       cloudConnected = true;
       // 刷新 jsDelivr CDN 缓存，确保队员读取到最新数据
