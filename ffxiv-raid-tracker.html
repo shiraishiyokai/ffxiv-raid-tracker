@@ -1041,6 +1041,7 @@ async function tryFetchCloudData(url, headers, signal) {
   return null;
 }
 
+// 通过 GitHub API 读取文件内容（无论有无 token）
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
   // 写入冷却期内跳过云端读取
@@ -1049,36 +1050,27 @@ async function fetchFromCloud(silent) {
   let content = null;
   let source = '';
 
-  if (githubToken) {
-    // 队长：走 GitHub API 读取（永远最新，有 token 无速率限制问题）
-    try {
-      const c = new AbortController();
-      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
-      const resp = await fetch(githubApiUrl(), { headers: githubHeaders(true), signal: c.signal });
-      clearTimeout(t);
-      if (resp.ok) {
-        const data = await resp.json();
-        const raw = atob(data.content);
-        content = JSON.parse(raw);
-        cloudFileSha = data.sha; // 顺便更新 SHA
-        source = 'GitHub API';
-      }
-    } catch (e) {
-      console.warn('[fetchFromCloud] GitHub API 读取失败:', e.message);
+  // 统一走 GitHub API 读取（永远最新，无 CDN 缓存问题）
+  try {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
+    const headers = githubToken ? githubHeaders(true) : { 'Accept': 'application/vnd.github.v3+json' };
+    const resp = await fetch(githubApiUrl(), { headers, signal: c.signal });
+    clearTimeout(t);
+    if (resp.ok) {
+      const data = await resp.json();
+      const raw = atob(data.content);
+      content = JSON.parse(raw);
+      if (data.sha) cloudFileSha = data.sha; // 更新 SHA
+      source = githubToken ? 'API(队长)' : 'API(队员)';
+    } else if (resp.status === 403) {
+      // 速率限制，等下次
+      console.warn('[fetchFromCloud] GitHub API 速率限制');
+    } else if (resp.status !== 404) {
+      console.warn('[fetchFromCloud] GitHub API 错误:', resp.status);
     }
-  }
-
-  if (!content) {
-    // 队员或队长 API 失败：走 raw.githubusercontent.com（慢但永远最新）
-    try {
-      const c = new AbortController();
-      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
-      content = await tryFetchCloudData(githubRawUrl(), null, c.signal);
-      clearTimeout(t);
-      if (content) source = 'raw.githubusercontent.com';
-    } catch (e) {
-      console.warn('[fetchFromCloud] raw 读取也失败:', e.message);
-    }
+  } catch (e) {
+    console.warn('[fetchFromCloud] GitHub API 读取失败:', e.message);
   }
 
   if (!content) return false;
