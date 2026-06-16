@@ -744,11 +744,13 @@ const ICONS = {
 };
 
 const SYNC_INTERVAL = 15000;
-const MEMBER_SYNC_INTERVAL = 120000; // 队员轮询间隔 2 分钟（raw 源慢）
-const GITHUB_REPO = 'shiraishiyokai/ffxiv-raid-tracker';
+const MEMBER_SYNC_INTERVAL = 120000; // 队员轮询间隔 2 分钟
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_RAW = 'https://raw.githubusercontent.com';
-const FETCH_TIMEOUT = 20000; // 20秒超时（raw 可能慢）
+const FETCH_TIMEOUT = 20000; // 20秒超时
+
+// 仓库地址从 URL 参数 ?repo=user/repo 读取，默认值方便开发
+let GITHUB_REPO = 'shiraishiyokai/ffxiv-raid-tracker';
 
 const ROLES = {
   MT:  { role: 'tank',   icon: '🛡️', iconImg: ICONS.MT, label: 'MT', fullLabel: '绝枪战士 GNB' },
@@ -2015,10 +2017,14 @@ function applyRole() {
 async function init() {
   loadState();
 
-  // Read URL params: ?team=xxx & ?token=xxx
+  // Read URL params: ?team=xxx & ?token=xxx & ?repo=user/repo
   const params = new URLSearchParams(window.location.search);
   const urlTeam = params.get('team') || '';
   const urlToken = params.get('token') || '';
+  const urlRepo = params.get('repo') || '';
+
+  // 仓库地址：URL 参数优先，支持不同队伍使用不同仓库
+  if (urlRepo) GITHUB_REPO = urlRepo;
 
   // URL params override localStorage; localStorage is fallback
   if (urlTeam) state.teamId = urlTeam;
