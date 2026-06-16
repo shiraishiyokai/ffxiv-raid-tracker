@@ -1072,7 +1072,7 @@ async function fetchFromCloud(silent) {
     // 队员或队长 API 失败：走 raw.githubusercontent.com（慢但永远最新）
     try {
       const c = new AbortController();
-      const t = setTimeout(() => c.abort(), 20000); // raw 给 20 秒超时
+      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
       content = await tryFetchCloudData(githubRawUrl(), null, c.signal);
       clearTimeout(t);
       if (content) source = 'raw.githubusercontent.com';
