@@ -901,20 +901,26 @@ async function createBlob() {
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(state),
     });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const location = resp.headers.get('Location');
-    if (!location) throw new Error('No Location header');
-    const blobId = location.split('/').pop();
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    // Try x-jsonblob-id header first (more reliable), fallback to Location
+    let blobId = resp.headers.get('x-jsonblob-id');
+    if (!blobId) {
+      const location = resp.headers.get('Location');
+      if (location) blobId = location.split('/').pop();
+    }
+    if (!blobId) throw new Error('无法获取记录本ID');
+
     state.blobId = blobId;
+    cloudConnected = true;
     saveLocal();
     await syncToCloud();
     setConnStatus('online', blobId);
     renderConnectionBar();
-    showToast('✅ 在线记录本已创建！', 'success');
     return blobId;
   } catch (e) {
-    setConnStatus('offline', '创建失败');
-    showToast('❌ 创建失败: ' + e.message, 'error');
+    setConnStatus('local', '');
+    console.error('createBlob error:', e);
     return null;
   }
 }
