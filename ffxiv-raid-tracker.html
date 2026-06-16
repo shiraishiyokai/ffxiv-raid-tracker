@@ -867,6 +867,7 @@ function loadState() {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.version >= 1 && parsed.days && parsed.memberNames) {
         state = parsed;
+        console.log('[loadState] 从 localStorage 加载，lastModified:', new Date(state.lastModified || 0).toLocaleString(), '天数:', Object.keys(state.days).length);
         // migration for new fields
         if (!state.mistakePresets) state.mistakePresets = [...DEFAULT_PRESETS];
         if (!state.teamId) state.teamId = '';
@@ -966,6 +967,7 @@ async function syncToCloud() {
     // 上传前更新时间戳，确保云端数据比本地旧时不被覆盖
     state.lastModified = Date.now();
     saveLocal();
+    console.log('[syncToCloud] 上传数据，lastModified:', new Date(state.lastModified).toLocaleString(), '天数:', Object.keys(state.days).length);
 
     const body = {
       message: `update ${getTeamDataPath()}`,
@@ -1036,12 +1038,14 @@ async function fetchFromCloud(silent) {
       // 时间戳保护：云端数据比本地旧则不覆盖
       const cloudTime = content.lastModified || 0;
       const localTime = state.lastModified || 0;
+      console.log('[fetchFromCloud] 云端 lastModified:', new Date(cloudTime).toLocaleString(), '本地 lastModified:', new Date(localTime).toLocaleString());
       if (cloudTime < localTime) {
-        console.log('云端数据比本地旧，跳过覆盖');
+        console.log('[fetchFromCloud] 云端数据比本地旧，跳过覆盖');
         return false;
       }
       const cloudStr = JSON.stringify(content);
       if (cloudStr !== lastCloudFetch) {
+        console.log('[fetchFromCloud] 云端数据有变化，覆盖本地');
         const localPresets = state.mistakePresets;
         const localTeamId = state.teamId;
         const localTeamName = state.teamName;
