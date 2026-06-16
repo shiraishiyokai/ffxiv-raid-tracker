@@ -171,9 +171,6 @@ body.member-mode .captain-only { display: none !important; }
   background: var(--bg-input); padding: 2px 8px; border-radius: 4px;
   font-size: 0.8rem;
 }
-#blobIdInput { width: 180px; padding: 4px 8px; font-size: 0.8rem; }
-#blobIdInput:disabled { display: none; }
-#joinSection { display: flex; gap: var(--space-sm); align-items: center; }
 #connActions { display: flex; gap: var(--space-sm); margin-left: auto; }
 
 /* ============================================================
@@ -589,15 +586,8 @@ body.member-mode .captain-only { display: none !important; }
   <div id="connectionBar">
     <span class="conn-status"><span id="connDot" class="conn-dot local"></span><span id="connLabel">本地模式</span></span>
     <span id="blobIdDisplay"></span>
-    <span id="joinSection" style="display:none;">
-      <input type="text" id="blobIdInput" placeholder="输入记录本 ID">
-      <button id="joinBlobBtn" class="btn btn-small">🔗 加入</button>
-      <button id="cancelJoinBtn" class="btn btn-small">取消</button>
-    </span>
     <span id="connActions">
-      <button id="createBlobBtn" class="btn btn-small captain-only">🆕 创建在线记录本</button>
-      <button id="showJoinInputBtn" class="btn btn-small captain-only">🔗 加入已有记录本</button>
-      <button id="copyBlobIdBtn" class="btn btn-small captain-only" style="display:none;">📋 复制链接</button>
+      <button id="copyBlobIdBtn" class="btn btn-small captain-only" style="display:none;">📋 复制分享链接</button>
       <button id="disconnectBtn" class="btn btn-small btn-danger captain-only" style="display:none;">断开</button>
     </span>
   </div>
@@ -1063,25 +1053,17 @@ function renderQuickBarIcons() {
 
 function renderConnectionBar() {
   const blobIdDisplay = document.getElementById('blobIdDisplay');
-  const createBtn = document.getElementById('createBlobBtn');
-  const showJoinBtn = document.getElementById('showJoinInputBtn');
   const copyBtn = document.getElementById('copyBlobIdBtn');
   const disconnectBtn = document.getElementById('disconnectBtn');
-  const joinSection = document.getElementById('joinSection');
 
-  if (state.blobId && cloudConnected) {
+  if (state.blobId) {
     blobIdDisplay.textContent = '记录本: ' + state.blobId;
-    createBtn.style.display = 'none';
-    showJoinBtn.style.display = 'none';
-    copyBtn.style.display = '';
-    disconnectBtn.style.display = '';
-    joinSection.style.display = 'none';
-  } else if (state.blobId && !cloudConnected) {
-    blobIdDisplay.textContent = '上次记录本: ' + state.blobId + ' (离线)';
+    if (isCaptain()) {
+      copyBtn.style.display = '';
+      disconnectBtn.style.display = '';
+    }
   } else {
     blobIdDisplay.textContent = '';
-    createBtn.style.display = '';
-    showJoinBtn.style.display = '';
     copyBtn.style.display = 'none';
     disconnectBtn.style.display = 'none';
   }
@@ -1302,18 +1284,6 @@ document.getElementById('app').addEventListener('click', function(e) {
     }
 
     // --- Connection ---
-    case 'create-blob':
-      createBlob();
-      break;
-    case 'show-join-input':
-      showJoinInput();
-      break;
-    case 'join-blob':
-      joinBlob();
-      break;
-    case 'cancel-join':
-      hideJoinInput();
-      break;
     case 'copy-blob-id':
       copyBlobId();
       break;
@@ -1397,40 +1367,15 @@ function submitQuickRecord() {
 }
 
 // --- Connection bar ---
-document.getElementById('createBlobBtn').addEventListener('click', createBlob);
-document.getElementById('showJoinInputBtn').addEventListener('click', showJoinInput);
-document.getElementById('joinBlobBtn').addEventListener('click', joinBlob);
-document.getElementById('cancelJoinBtn').addEventListener('click', hideJoinInput);
 document.getElementById('copyBlobIdBtn').addEventListener('click', copyBlobId);
 document.getElementById('disconnectBtn').addEventListener('click', disconnectCloud);
-
-function showJoinInput() {
-  document.getElementById('joinSection').style.display = 'flex';
-  document.getElementById('blobIdInput').focus();
-  document.getElementById('showJoinInputBtn').style.display = 'none';
-  document.getElementById('createBlobBtn').style.display = 'none';
-}
-
-function hideJoinInput() {
-  document.getElementById('joinSection').style.display = 'none';
-  document.getElementById('blobIdInput').value = '';
-  renderConnectionBar();
-}
-
-async function joinBlob() {
-  const blobId = document.getElementById('blobIdInput').value.trim();
-  if (!blobId) { showToast('请输入记录本 ID', 'error'); return; }
-  connectToBlob(blobId);
-  hideJoinInput();
-  showToast('✅ 已连接到在线记录本', 'success');
-}
 
 async function copyBlobId() {
   if (!state.blobId) return;
   const base = window.location.origin + window.location.pathname;
-  const captainLink = base + '#captain';
-  const memberLink = base;
-  const text = `⚔️ FFXIV 开荒记录表\n👑 队长链接(可编辑): ${captainLink}\n🧑 队员链接(仅备注): ${memberLink}\n🔑 记录本ID: ${state.blobId}`;
+  const captainLink = base + '?blob=' + state.blobId + '#captain';
+  const memberLink = base + '?blob=' + state.blobId;
+  const text = `⚔️ FFXIV 开荒记录表\n👑 队长链接(可编辑): ${captainLink}\n🧑 队员链接(仅备注): ${memberLink}`;
   try {
     await navigator.clipboard.writeText(text);
     showToast('📋 队长/队员链接已复制！发到群里即可', 'success');
@@ -1827,6 +1772,12 @@ function isCaptain() {
   return window.location.hash === '#captain';
 }
 
+// Get blob ID from URL query param (?blob=xxx) or localStorage
+function getBlobIdFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('blob') || '';
+}
+
 function applyRole() {
   const captain = isCaptain();
   const indicator = document.getElementById('roleIndicator');
@@ -1848,41 +1799,61 @@ function applyRole() {
   }
 }
 
-function init() {
+async function init() {
   loadState();
 
   // Detect role from URL hash
   applyRole();
 
-  // Restore cloud connection if was connected
+  // Priority: URL ?blob= param > localStorage blobId
+  const urlBlobId = getBlobIdFromURL();
+  if (urlBlobId) {
+    state.blobId = urlBlobId;
+    saveLocal();
+  }
+
+  // Cloud connection logic
   if (state.blobId) {
+    // Existing blob — connect and fetch
     cloudConnected = true;
     lastCloudFetch = '';
-    setConnStatus('online', state.blobId);
-    fetchFromCloud(false).then(changed => {
+    setConnStatus('syncing', '同步中...');
+    renderConnectionBar();
+    try {
+      const changed = await fetchFromCloud(false);
       if (changed) {
         showToast('📥 已从云端同步最新数据', 'info');
       }
-    });
+      setConnStatus('online', state.blobId);
+    } catch (e) {
+      setConnStatus('offline', state.blobId);
+      showToast('⚠️ 云端连接失败，使用本地数据', 'error');
+    }
     startSyncTimer();
+  } else if (isCaptain()) {
+    // Captain with no blob — auto create one
+    setConnStatus('syncing', '创建记录本...');
+    renderConnectionBar();
+    const blobId = await createBlob();
+    if (blobId) {
+      // Update URL to include blob param (no page reload)
+      const url = new URL(window.location);
+      url.searchParams.set('blob', blobId);
+      window.history.replaceState({}, '', url);
+      showToast('✅ 在线记录本已自动创建！点击「📋 复制分享链接」发给队员', 'success');
+    } else {
+      showToast('⚠️ 云端创建失败，当前为本地模式。数据仅保存在本浏览器中', 'error');
+      setConnStatus('local', '');
+    }
   } else {
+    // Member with no blob — show hint
     setConnStatus('local', '');
+    showToast('⚠️ 未检测到记录本，请使用队长分享的链接打开', 'info');
   }
 
+  renderConnectionBar();
   activeDate = todayISO();
   renderAll();
-
-  // Auto-join cloud if blobId exists (member might have just opened the link)
-  if (state.blobId && !cloudConnected) {
-    connectToBlob(state.blobId);
-  }
-
-  // Show create blob button if no connection and is captain
-  if (!state.blobId && isCaptain()) {
-    setTimeout(() => {
-      document.getElementById('createBlobBtn').style.display = '';
-    }, 100);
-  }
 }
 
 // Listen for hash changes (e.g. switching between captain/member)
