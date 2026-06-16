@@ -162,6 +162,8 @@ body.member-mode .captain-only { display: none !important; }
 #connectionBar .conn-status { display: flex; align-items: center; gap: 4px; }
 #connectionBar .conn-dot { width: 9px; height: 9px; border-radius: 50%; }
 .conn-dot.online { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+.conn-dot.saving { background: var(--accent-yellow); animation: pulse 0.6s ease infinite; }
+.conn-dot.saved { background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
 .conn-dot.syncing { background: var(--accent-yellow); animation: pulse 0.8s ease infinite; }
 .conn-dot.offline { background: var(--accent-red); }
 .conn-dot.local { background: var(--text-muted); }
@@ -913,6 +915,9 @@ function saveState() {
   saveLocal();
   if (state.teamId && githubToken) {
     if (debouncedSaveToCloud) {
+      // 显示保存中状态
+      setConnStatus('saving');
+      renderConnectionBar();
       debouncedSaveToCloud();
     }
   }
@@ -980,17 +985,24 @@ async function syncToCloud() {
       lastCloudFetch = JSON.stringify(state);
       lastWriteTime = Date.now(); // 记录写入时间，防止轮询覆盖
       cloudConnected = true;
-      // 刷新 jsDelivr CDN 缓存，确保下次读取到最新数据
+      // 刷新 jsDelivr CDN 缓存，确保队员读取到最新数据
       purgeJsDelivrCache();
+      // 显示"已同步"状态，3 秒后恢复
+      showSavedStatus();
     } else {
       const err = await resp.json().catch(() => ({}));
       console.error('syncToCloud error:', resp.status, err);
       cloudConnected = false;
-      showToast('⚠️ 同步失败: ' + (err.message || resp.status), 'error');
+      setConnStatus('offline');
+      renderConnectionBar();
+      showToast('❌ 同步失败: ' + (err.message || resp.status), 'error');
     }
   } catch (e) {
     console.error('syncToCloud exception:', e);
     cloudConnected = false;
+    setConnStatus('offline');
+    renderConnectionBar();
+    showToast('❌ 网络异常，数据仅保存在本地: ' + e.message, 'error');
   }
 }
 
@@ -1080,15 +1092,36 @@ function setConnStatus(status, extra) {
   const label = document.getElementById('connLabel');
   const display = document.getElementById('blobIdDisplay');
   dot.className = 'conn-dot ' + status;
-  const labels = { online: '🟢 在线同步', syncing: '同步中...', offline: '离线模式', local: '本地模式' };
+  const labels = {
+    online: '🟢 在线同步',
+    saving: '⏳ 保存中...',
+    saved: '✅ 已同步',
+    syncing: '🔄 同步中...',
+    offline: '🔴 离线模式',
+    local: '📁 本地模式'
+  };
   label.textContent = labels[status] || '本地模式';
   if (state.teamId && status !== 'local') {
-    display.textContent = '队伍: ' + state.teamId;
+    display.textContent = state.teamName || state.teamId;
   } else {
     display.textContent = '';
   }
-  if (status === 'online') cloudConnected = true;
+  if (status === 'online' || status === 'saved') cloudConnected = true;
   if (status === 'offline') cloudConnected = false;
+}
+
+// 显示"已同步"状态，3 秒后自动恢复为"在线"
+let savedStatusTimer = null;
+function showSavedStatus() {
+  setConnStatus('saved');
+  renderConnectionBar();
+  clearTimeout(savedStatusTimer);
+  savedStatusTimer = setTimeout(() => {
+    if (cloudConnected) {
+      setConnStatus('online');
+      renderConnectionBar();
+    }
+  }, 3000);
 }
 
 // ============================================================
