@@ -742,6 +742,8 @@ const SYNC_INTERVAL = 15000;
 const GITHUB_REPO = 'shiraishiyokai/ffxiv-raid-tracker';
 const GITHUB_API = 'https://api.github.com';
 const GITHUB_RAW = 'https://raw.githubusercontent.com';
+const JSDELIVR_CDN = 'https://cdn.jsdelivr.net/gh';
+const FETCH_TIMEOUT = 10000; // 10秒超时
 
 const ROLES = {
   MT:  { role: 'tank',   icon: '🛡️', iconImg: ICONS.MT, label: 'MT', fullLabel: '绝枪战士 GNB' },
@@ -977,6 +979,8 @@ async function syncToCloud() {
       cloudFileSha = data.content.sha;
       lastCloudFetch = JSON.stringify(state);
       cloudConnected = true;
+      // 刷新 jsDelivr CDN 缓存，确保下次读取到最新数据
+      purgeJsDelivrCache();
     } else {
       const err = await resp.json().catch(() => ({}));
       console.error('syncToCloud error:', resp.status, err);
@@ -990,14 +994,27 @@ async function syncToCloud() {
 }
 
 function githubRawUrl() {
-  return `${GITHUB_RAW}/${GITHUB_REPO}/main/${getTeamDataPath()}`;
+  // 使用 jsDelivr CDN（有国内节点，速度快）替代 raw.githubusercontent.com
+  return `${JSDELIVR_CDN}/${GITHUB_REPO}@main/${getTeamDataPath()}`;
+}
+
+function purgeJsDelivrCache() {
+  // 写入成功后刷新 jsDelivr CDN 缓存，确保队员读取到最新数据
+  const path = getTeamDataPath();
+  const purgeUrl = `https://purge.jsdelivr.net/gh/${GITHUB_REPO}@main/${path}`;
+  fetch(purgeUrl).catch(() => {});
+  // 同时刷新带 cache-busting 参数的 URL
+  fetch(purgeUrl + '?t=' + Date.now()).catch(() => {});
 }
 
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
   try {
-    // Read file content via raw URL (no rate limit, no auth needed)
-    const resp = await fetch(githubRawUrl());
+    // Read file content via jsDelivr CDN (有国内节点，速度快)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+    const resp = await fetch(githubRawUrl(), { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (resp.status === 404) return false;
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const content = await resp.json();
@@ -1902,10 +1919,19 @@ async function init() {
 
   // Cloud connection — async, non-blocking
   if (state.teamId) {
-    setConnStatus('syncing', '同步中...');
+    // 已有 teamId 和本地数据，先标记在线（本地数据立即可用），后台同步
+    if (state.token || githubToken) {
+      cloudConnected = true;
+      setConnStatus('online', '');
+    } else {
+      setConnStatus('syncing', '同步中...');
+    }
     renderConnectionBar();
     fetchFromCloud(false).then(changed => {
-      if (changed) showToast('📥 已从云端同步最新数据', 'info');
+      if (changed) {
+        showToast('📥 已从云端同步最新数据', 'info');
+        renderAll();
+      }
       cloudConnected = true;
       setConnStatus('online', '');
       renderConnectionBar();
