@@ -741,6 +741,7 @@ const ICONS = {
 const SYNC_INTERVAL = 15000;
 const GITHUB_REPO = 'shiraishiyokai/ffxiv-raid-tracker';
 const GITHUB_API = 'https://api.github.com';
+const GITHUB_RAW = 'https://raw.githubusercontent.com';
 
 const ROLES = {
   MT:  { role: 'tank',   icon: '🛡️', iconImg: ICONS.MT, label: 'MT', fullLabel: '绝枪战士 GNB' },
@@ -939,15 +940,15 @@ function githubHeaders(forWrite) {
 async function syncToCloud() {
   if (!githubToken) return;
   try {
-    // If we don't have SHA, try to GET the file first to get its SHA
+    // GET the file's SHA via API (with token to avoid rate limit)
     if (!cloudFileSha) {
       try {
-        const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
+        const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(true) });
         if (getResp.ok) {
           const getData = await getResp.json();
           cloudFileSha = getData.sha;
         }
-        // 404 is fine — file doesn't exist yet, will be created
+        // 404 is fine — file doesn't exist yet
       } catch (_) {}
     }
 
@@ -979,25 +980,28 @@ async function syncToCloud() {
   }
 }
 
+function githubRawUrl() {
+  return `${GITHUB_RAW}/${GITHUB_REPO}/main/${getTeamDataPath()}`;
+}
+
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
   try {
-    const resp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
-    if (resp.status === 404) {
-      // File doesn't exist yet — that's ok, will be created on first write
-      return false;
-    }
+    // Read file content via raw URL (no rate limit, no auth needed)
+    const resp = await fetch(githubRawUrl());
+    if (resp.status === 404) return false;
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    cloudFileSha = data.sha;
-    const content = JSON.parse(decodeURIComponent(escape(atob(data.content))));
+    const content = await resp.json();
     if (content && content.version && content.days) {
       const cloudStr = JSON.stringify(content);
       if (cloudStr !== lastCloudFetch) {
         const localPresets = state.mistakePresets;
+        const localTeamId = state.teamId;
+        const localTeamName = state.teamName;
         state = content;
         if (!state.mistakePresets) state.mistakePresets = localPresets;
-        state.teamId = state.teamId; // preserve
+        state.teamId = localTeamId;
+        state.teamName = localTeamName;
         saveLocal();
         lastCloudFetch = cloudStr;
         if (!silent) renderAll();
