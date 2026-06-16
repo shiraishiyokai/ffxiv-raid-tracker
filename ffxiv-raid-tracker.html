@@ -589,6 +589,7 @@ body.member-mode .captain-only { display: none !important; }
     <span class="conn-status"><span id="connDot" class="conn-dot local"></span><span id="connLabel">本地模式</span></span>
     <span id="blobIdDisplay"></span>
     <span id="connActions">
+      <button id="manualSyncBtn" class="btn btn-small btn-primary captain-only" style="display:none;">☁️ 保存到云端</button>
       <button id="copyBlobIdBtn" class="btn btn-small captain-only" style="display:none;">📋 复制分享链接</button>
       <button id="disconnectBtn" class="btn btn-small btn-danger captain-only" style="display:none;">断开</button>
     </span>
@@ -913,14 +914,7 @@ function getActiveDay() {
 
 function saveState() {
   saveLocal();
-  if (state.teamId && githubToken) {
-    if (debouncedSaveToCloud) {
-      // 显示保存中状态
-      setConnStatus('saving');
-      renderConnectionBar();
-      debouncedSaveToCloud();
-    }
-  }
+  // 不再自动同步云端，队长需手动点击「☁️ 保存到云端」按钮
 }
 
 // ============================================================
@@ -1153,6 +1147,7 @@ function renderConnectionBar() {
   const blobIdDisplay = document.getElementById('blobIdDisplay');
   const copyBtn = document.getElementById('copyBlobIdBtn');
   const disconnectBtn = document.getElementById('disconnectBtn');
+  const manualSyncBtn = document.getElementById('manualSyncBtn');
   const tokenSetup = document.getElementById('tokenSetup');
 
   if (state.teamId && cloudConnected) {
@@ -1160,12 +1155,16 @@ function renderConnectionBar() {
     if (isCaptain()) {
       copyBtn.style.display = '';
       disconnectBtn.style.display = '';
+      if (manualSyncBtn) manualSyncBtn.style.display = '';
+    } else {
+      if (manualSyncBtn) manualSyncBtn.style.display = 'none';
     }
     if (tokenSetup) tokenSetup.hidden = true;
   } else {
     blobIdDisplay.textContent = '';
     copyBtn.style.display = 'none';
     disconnectBtn.style.display = 'none';
+    if (manualSyncBtn) manualSyncBtn.style.display = 'none';
     // Show token setup for captain without connection
     if (isCaptain() && !githubToken && tokenSetup) tokenSetup.hidden = false;
   }
@@ -1471,6 +1470,24 @@ function submitQuickRecord() {
 // --- Connection bar ---
 document.getElementById('copyBlobIdBtn').addEventListener('click', copyBlobId);
 document.getElementById('disconnectBtn').addEventListener('click', disconnectCloud);
+document.getElementById('manualSyncBtn').addEventListener('click', async function() {
+  if (!githubToken || !state.teamId) {
+    showToast('⚠️ 未连接云端', 'error');
+    return;
+  }
+  const btn = document.getElementById('manualSyncBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ 保存中...';
+  setConnStatus('saving');
+  renderConnectionBar();
+  try {
+    await syncToCloud();
+  } catch (e) {
+    // syncToCloud 内部已处理错误
+  }
+  btn.disabled = false;
+  btn.textContent = '☁️ 保存到云端';
+});
 
 // Token setup
 document.getElementById('tokenSubmitBtn').addEventListener('click', async function() {
