@@ -728,6 +728,7 @@ body.member-mode .captain-only { display: none !important; }
 // SECTION 1: CONFIGURATION
 // ============================================================
 const STORAGE_KEY = 'ffxiv-raid-tracker';
+const TOKEN_STORAGE_KEY = 'ffxiv-raid-tracker-token';
 const CURRENT_VERSION = 1;
 
 const ICONS = {
@@ -872,11 +873,15 @@ function loadState() {
         if (!state.mistakePresets) state.mistakePresets = [...DEFAULT_PRESETS];
         if (!state.teamId) state.teamId = '';
         if (!state.teamName) state.teamName = '';
-        if (!state.token) state.token = '';
         // migrate old blobId to teamId if needed
         if (!state.teamId && state.blobId) {
           state.teamId = state.blobId;
           delete state.blobId;
+        }
+        // 迁移旧版 state.token 到独立存储
+        if (state.token) {
+          localStorage.setItem(TOKEN_STORAGE_KEY, state.token);
+          delete state.token;
         }
         for (const day of Object.values(state.days)) {
           for (const key of Object.keys(ROLES)) {
@@ -896,7 +901,13 @@ function loadState() {
 function saveLocal() {
   try {
     state.lastModified = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    // token 不存入 state，用独立 key 保存
+    const data = { ...state };
+    delete data.token;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (githubToken) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, githubToken);
+    }
   } catch (e) {
     showToast('⚠️ 本地存储已满，请导出数据备份', 'error');
   }
@@ -969,12 +980,10 @@ async function syncToCloud() {
     saveLocal();
     console.log('[syncToCloud] 上传数据，lastModified:', new Date(state.lastModified).toLocaleString(), '天数:', Object.keys(state.days).length);
 
-    // 构建上传数据：去掉 token（GitHub 不能存 token，会被安全扫描拦截）
-    const uploadData = { ...state };
-    delete uploadData.token;
+    // state 中不含 token，直接序列化上传
     const body = {
       message: `update ${getTeamDataPath()}`,
-      content: btoa(unescape(encodeURIComponent(JSON.stringify(uploadData)))),
+      content: btoa(unescape(encodeURIComponent(JSON.stringify(state)))),
     };
     if (cloudFileSha) body.sha = cloudFileSha;
 
@@ -986,7 +995,7 @@ async function syncToCloud() {
     if (resp.ok) {
       const data = await resp.json();
       cloudFileSha = data.content.sha;
-      lastCloudFetch = JSON.stringify(uploadData); // 用不含 token 的数据做比较
+      lastCloudFetch = JSON.stringify(state); // state 不含 token，直接比较
       lastWriteTime = Date.now(); // 记录写入时间，防止轮询覆盖
       cloudConnected = true;
       // 刷新 jsDelivr CDN 缓存，确保队员读取到最新数据
@@ -1074,7 +1083,7 @@ function disconnectCloud() {
   cloudConnected = false;
   state.teamId = '';
   state.teamName = '';
-  state.token = '';
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
   githubToken = '';
   cloudFileSha = '';
   stopSyncTimer();
@@ -1519,7 +1528,7 @@ document.getElementById('tokenSubmitBtn').addEventListener('click', async functi
     return;
   }
   githubToken = token;
-  state.token = token; // Persist token to localStorage
+  localStorage.setItem(TOKEN_STORAGE_KEY, token); // token 独立存储，不进 state
   // Generate team ID if not exists
   if (!state.teamId) {
     state.teamId = 'team-' + Date.now().toString(36);
@@ -1984,10 +1993,13 @@ async function init() {
 
   // URL params override localStorage; localStorage is fallback
   if (urlTeam) state.teamId = urlTeam;
-  if (urlToken) { githubToken = urlToken; state.token = urlToken; }
+  if (urlToken) { githubToken = urlToken; localStorage.setItem(TOKEN_STORAGE_KEY, urlToken); }
 
-  // Restore token from localStorage if not in URL
-  if (!githubToken && state.token) githubToken = state.token;
+  // Restore token from independent localStorage key
+  if (!githubToken) {
+    const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (savedToken) githubToken = savedToken;
+  }
 
   applyRole();
 
@@ -1998,7 +2010,7 @@ async function init() {
   // Cloud connection — async, non-blocking
   if (state.teamId) {
     // 已有 teamId 和本地数据，先标记在线（本地数据立即可用），后台同步
-    if (state.token || githubToken) {
+    if (githubToken) {
       cloudConnected = true;
       setConnStatus('online', '');
     } else {
