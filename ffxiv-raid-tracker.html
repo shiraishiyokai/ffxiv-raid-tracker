@@ -1051,32 +1051,49 @@ async function fetchFromCloud(silent) {
   // 写入冷却期内跳过云端读取，防止 CDN 旧缓存覆盖新数据
   if (Date.now() - lastWriteTime < 30000) return false;
 
-  // 先尝试 jsDelivr CDN（国内快），失败则回退到 raw.githubusercontent.com（慢但最新）
+  // 同时发起两个请求，用最新的数据
+  let jsDelivrData = null;
+  let rawData = null;
+
+  // 并行请求两个源
+  const fetchJsDelivr = async () => {
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
+      const data = await tryFetchCloudData(githubRawUrl(), c.signal);
+      clearTimeout(t);
+      return data;
+    } catch (e) { return null; }
+  };
+
+  const fetchRaw = async () => {
+    try {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
+      const data = await tryFetchCloudData(githubRawFallbackUrl(), c.signal);
+      clearTimeout(t);
+      return data;
+    } catch (e) { return null; }
+  };
+
+  [jsDelivrData, rawData] = await Promise.all([fetchJsDelivr(), fetchRaw()]);
+
+  // 两个源都拿到数据时，用更新的那个
   let content = null;
   let source = '';
-
-  // 尝试 jsDelivr
-  try {
-    const c1 = new AbortController();
-    const t1 = setTimeout(() => c1.abort(), FETCH_TIMEOUT);
-    content = await tryFetchCloudData(githubRawUrl(), c1.signal);
-    clearTimeout(t1);
-    if (content) source = 'jsDelivr';
-  } catch (e) {
-    console.log('[fetchFromCloud] jsDelivr 失败，尝试备用源');
-  }
-
-  // jsDelivr 失败，尝试 raw.githubusercontent.com
-  if (!content) {
-    try {
-      const c2 = new AbortController();
-      const t2 = setTimeout(() => c2.abort(), FETCH_TIMEOUT);
-      content = await tryFetchCloudData(githubRawFallbackUrl(), c2.signal);
-      clearTimeout(t2);
-      if (content) source = 'raw.githubusercontent.com';
-    } catch (e2) {
-      console.warn('[fetchFromCloud] 备用源也失败:', e2.message);
+  if (jsDelivrData && rawData) {
+    const cdnTime = jsDelivrData.lastModified || 0;
+    const rawTime = rawData.lastModified || 0;
+    if (rawTime > cdnTime) {
+      content = rawData;
+      source = 'raw(更新)';
+    } else {
+      content = jsDelivrData;
+      source = 'jsDelivr';
     }
+  } else {
+    content = jsDelivrData || rawData;
+    source = jsDelivrData ? 'jsDelivr' : (rawData ? 'raw' : '');
   }
 
   if (!content) return false;
