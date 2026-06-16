@@ -1010,26 +1010,13 @@ function purgeJsDelivrCache() {
 
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
+  // 写入冷却期内跳过云端读取，防止 CDN 旧缓存覆盖新数据
+  if (Date.now() - lastWriteTime < 30000) return false;
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-    // 队长（有 token）走 GitHub API 直读（永远最新，无 CDN 缓存）
-    // 队员（无 token）走 jsDelivr CDN（国内速度快）
-    let resp;
-    if (githubToken) {
-      resp = await fetch(githubApiUrl(), {
-        headers: githubHeaders(true),
-        signal: controller.signal,
-      });
-      if (resp.ok) {
-        // GitHub API returns { sha, content (base64), ... }, need to decode
-        const data = await resp.json();
-        const raw = atob(data.content);
-        resp = { status: resp.status, ok: resp.ok, json: () => JSON.parse(raw) };
-      }
-    } else {
-      resp = await fetch(githubRawUrl(), { signal: controller.signal });
-    }
+    // 队长和队员都从 jsDelivr CDN 读取（国内速度快，无需翻墙）
+    const resp = await fetch(githubRawUrl(), { signal: controller.signal });
     clearTimeout(timeoutId);
     if (resp.status === 404) return false;
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1077,8 +1064,8 @@ let lastWriteTime = 0; // 上次写入时间，防止轮询覆盖
 function startSyncTimer() {
   stopSyncTimer();
   syncTimer = setInterval(() => {
-    // 写入后 5 秒内跳过轮询，避免读到旧缓存覆盖新数据
-    if (cloudConnected && state.teamId && Date.now() - lastWriteTime > 5000) {
+    // 写入后 30 秒内跳过轮询，避免 CDN 旧缓存覆盖新数据
+    if (cloudConnected && state.teamId && Date.now() - lastWriteTime > 30000) {
       fetchFromCloud(true);
     }
   }, SYNC_INTERVAL);
