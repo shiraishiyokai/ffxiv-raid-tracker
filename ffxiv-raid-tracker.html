@@ -835,6 +835,7 @@ function createEmptyState() {
     version: CURRENT_VERSION,
     teamId: '',
     teamName: '',
+    token: '',
     memberNames: { MT:'', ST:'', H1:'', H2:'', D1:'', D2:'', D3:'', D4:'' },
     mistakePresets: [...DEFAULT_PRESETS],
     days: {},
@@ -1019,6 +1020,8 @@ async function fetchFromCloud(silent) {
 function disconnectCloud() {
   cloudConnected = false;
   state.teamId = '';
+  state.teamName = '';
+  state.token = '';
   githubToken = '';
   cloudFileSha = '';
   stopSyncTimer();
@@ -1413,6 +1416,7 @@ document.getElementById('tokenSubmitBtn').addEventListener('click', async functi
     return;
   }
   githubToken = token;
+  state.token = token; // Persist token to localStorage
   // Generate team ID if not exists
   if (!state.teamId) {
     state.teamId = 'team-' + Date.now().toString(36);
@@ -1422,21 +1426,21 @@ document.getElementById('tokenSubmitBtn').addEventListener('click', async functi
   // Try to create/update the data file on GitHub
   setConnStatus('syncing', '连接中...');
   renderConnectionBar();
-  try {
-    await syncToCloud();
+  syncToCloud().then(() => {
     cloudConnected = true;
-    // Update URL to include params
     const url = new URL(window.location);
     url.searchParams.set('team', state.teamId);
     url.searchParams.set('token', githubToken);
     window.history.replaceState({}, '', url);
     setConnStatus('online', '');
+    renderConnectionBar();
     startSyncTimer();
     showToast('✅ 连接成功！点击「📋 复制分享链接」发给队员', 'success');
-  } catch (e) {
+  }).catch(e => {
     setConnStatus('local', '');
+    renderConnectionBar();
     showToast('❌ 连接失败，请检查 Token 是否正确', 'error');
-  }
+  });
   renderConnectionBar();
   renderAll();
 });
@@ -1875,8 +1879,12 @@ async function init() {
   const urlTeam = params.get('team') || '';
   const urlToken = params.get('token') || '';
 
+  // URL params override localStorage; localStorage is fallback
   if (urlTeam) state.teamId = urlTeam;
-  if (urlToken) githubToken = urlToken;
+  if (urlToken) { githubToken = urlToken; state.token = urlToken; }
+
+  // Restore token from localStorage if not in URL
+  if (!githubToken && state.token) githubToken = state.token;
 
   applyRole();
 
