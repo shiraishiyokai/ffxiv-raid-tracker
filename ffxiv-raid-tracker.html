@@ -1150,23 +1150,26 @@ function renderConnectionBar() {
   const manualSyncBtn = document.getElementById('manualSyncBtn');
   const tokenSetup = document.getElementById('tokenSetup');
 
-  if (state.teamId && cloudConnected) {
+  // 有队伍就显示队伍名
+  if (state.teamId) {
     blobIdDisplay.textContent = (state.teamName || state.teamId);
-    if (isCaptain()) {
-      copyBtn.style.display = '';
-      disconnectBtn.style.display = '';
-      if (manualSyncBtn) manualSyncBtn.style.display = '';
-    } else {
-      if (manualSyncBtn) manualSyncBtn.style.display = 'none';
-    }
-    if (tokenSetup) tokenSetup.hidden = true;
   } else {
     blobIdDisplay.textContent = '';
+  }
+
+  // 队长有 token + teamId 就显示保存/复制/断开按钮
+  if (isCaptain() && githubToken && state.teamId) {
+    copyBtn.style.display = '';
+    disconnectBtn.style.display = '';
+    if (manualSyncBtn) manualSyncBtn.style.display = '';
+    if (tokenSetup) tokenSetup.hidden = true;
+  } else {
     copyBtn.style.display = 'none';
     disconnectBtn.style.display = 'none';
     if (manualSyncBtn) manualSyncBtn.style.display = 'none';
-    // Show token setup for captain without connection
+    // 队长没 token 时显示 token 设置
     if (isCaptain() && !githubToken && tokenSetup) tokenSetup.hidden = false;
+    else if (tokenSetup) tokenSetup.hidden = true;
   }
 }
 
