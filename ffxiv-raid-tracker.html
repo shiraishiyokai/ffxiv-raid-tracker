@@ -347,6 +347,7 @@ body.member-mode .captain-only { display: none !important; }
 }
 .member-card .member-name-input:hover { border-color: var(--border-color); }
 .member-card .member-name-input:focus { border-color: var(--accent-gold); outline: none; cursor: text; background: var(--bg-input); }
+.member-card .member-name-input.member-readonly { border: none; cursor: default; pointer-events: none; opacity: 0.9; }
 .member-card .badge {
   font-size: 0.75rem; font-weight: 700; padding: 2px 8px;
   border-radius: 10px; background: var(--bg-input);
@@ -579,8 +580,8 @@ body.member-mode .captain-only { display: none !important; }
     <h1 class="title"><span class="title-icon">⚔️</span>FFXIV 副本开荒犯错记录表</h1>
     <div class="header-actions">
       <span id="roleIndicator"></span>
-      <button id="exportBtn" class="btn">💾 导出备份</button>
-      <button id="importBtn" class="btn">📥 导入数据</button>
+      <button id="exportBtn" class="btn captain-only">💾 导出备份</button>
+      <button id="importBtn" class="btn captain-only">📥 导入数据</button>
     </div>
   </header>
 
@@ -1259,7 +1260,7 @@ function renderMemberCards() {
       html += `<img class="job-icon" src="${role.iconImg}" alt="${role.label}" title="${role.fullLabel}">`;
       html += `<div class="member-info">`;
       html += `<div class="member-role">${key} · ${role.fullLabel}</div>`;
-      html += `<input class="member-name-input" data-member="${key}" value="${escapeHtml(name)}" placeholder="点击输入名字" title="点击编辑队员名字">`;
+      html += `<input class="member-name-input${isCaptain() ? '' : ' member-readonly'}" data-member="${key}" value="${escapeHtml(name)}" placeholder="${isCaptain() ? '点击输入名字' : ''}" title="${isCaptain() ? '点击编辑队员名字' : ''}" ${isCaptain() ? '' : 'readonly'}>`;
       html += `</div>`;
       html += `<span class="badge ${hasMistakes ? 'has-mistakes' : 'clean'}">${hasMistakes ? totalMistakes + '次' : '干净'}</span>`;
       html += `</div>`;
