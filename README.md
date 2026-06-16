@@ -2,7 +2,7 @@
 
 一个面向 FFXIV 静态队的在线犯错记录与复盘工具。队长记录犯错，队员添加复盘备注，一键生成群公告总结。
 
-**[📍 在线演示](https://shiraishiyokai.github.io/ffxiv-raid-tracker/ffxiv-raid-tracker.html)** · **[📖 使用指南](./FFXIV开荒记录表使用指南.md)**
+**[📍 在线演示](https://shiraishiyokai.github.io/ffxiv-raid-tracker/ffxiv-raid-tracker.html)**
 
 ---
 
