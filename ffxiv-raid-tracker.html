@@ -980,10 +980,8 @@ async function syncToCloud() {
     saveLocal();
     console.log('[syncToCloud] 上传数据，lastModified:', new Date(state.lastModified).toLocaleString(), '天数:', Object.keys(state.days).length);
 
-    // base64 编码（正确处理 UTF-8 中文）
-    const jsonStr = JSON.stringify(state);
-    const bytes = new TextEncoder().encode(jsonStr);
-    const base64 = btoa(String.fromCharCode(...bytes));
+    // base64 编码（与下载解码完全对称：encodeURIComponent → escape → btoa）
+    const base64 = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
 
     const body = {
       message: `update ${getTeamDataPath()}`,
@@ -1063,11 +1061,8 @@ async function fetchFromCloud(silent) {
     clearTimeout(t);
     if (resp.ok) {
       const data = await resp.json();
-      // 正确解码 base64 UTF-8 内容（atob 会把中文变乱码，需要 TextDecoder）
-      const binaryStr = atob(data.content);
-      const bytes = new Uint8Array(binaryStr.length);
-      for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-      const raw = new TextDecoder('utf-8').decode(bytes);
+      // base64 解码（与上传编码对称：atob → escape → decodeURIComponent）
+      const raw = decodeURIComponent(escape(atob(data.content)));
       content = JSON.parse(raw);
       if (data.sha) cloudFileSha = data.sha; // 更新 SHA
       source = githubToken ? 'API(队长)' : 'API(队员)';
