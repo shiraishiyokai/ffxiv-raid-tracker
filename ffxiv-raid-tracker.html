@@ -899,7 +899,7 @@ function getActiveDay() {
 
 function saveState() {
   saveLocal();
-  if (cloudConnected && state.teamId && githubToken) {
+  if (state.teamId && githubToken) {
     if (debouncedSaveToCloud) {
       debouncedSaveToCloud();
     }
@@ -937,8 +937,20 @@ function githubHeaders(forWrite) {
 }
 
 async function syncToCloud() {
-  if (!cloudConnected || !githubToken) return;
+  if (!githubToken) return;
   try {
+    // If we don't have SHA, try to GET the file first to get its SHA
+    if (!cloudFileSha) {
+      try {
+        const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
+        if (getResp.ok) {
+          const getData = await getResp.json();
+          cloudFileSha = getData.sha;
+        }
+        // 404 is fine — file doesn't exist yet, will be created
+      } catch (_) {}
+    }
+
     const body = {
       message: `update ${getTeamDataPath()}`,
       content: btoa(unescape(encodeURIComponent(JSON.stringify(state)))),
@@ -954,12 +966,16 @@ async function syncToCloud() {
       const data = await resp.json();
       cloudFileSha = data.content.sha;
       lastCloudFetch = JSON.stringify(state);
+      cloudConnected = true;
     } else {
       const err = await resp.json().catch(() => ({}));
-      throw new Error(err.message || `HTTP ${resp.status}`);
+      console.error('syncToCloud error:', resp.status, err);
+      cloudConnected = false;
+      showToast('⚠️ 同步失败: ' + (err.message || resp.status), 'error');
     }
   } catch (e) {
-    console.warn('Cloud sync failed:', e);
+    console.error('syncToCloud exception:', e);
+    cloudConnected = false;
   }
 }
 
