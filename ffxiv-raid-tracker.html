@@ -978,6 +978,7 @@ async function syncToCloud() {
       const data = await resp.json();
       cloudFileSha = data.content.sha;
       lastCloudFetch = JSON.stringify(state);
+      lastWriteTime = Date.now(); // 记录写入时间，防止轮询覆盖
       cloudConnected = true;
       // 刷新 jsDelivr CDN 缓存，确保下次读取到最新数据
       purgeJsDelivrCache();
@@ -994,7 +995,7 @@ async function syncToCloud() {
 }
 
 function githubRawUrl() {
-  // 使用 jsDelivr CDN（有国内节点，速度快）替代 raw.githubusercontent.com
+  // jsDelivr CDN（有国内节点，速度快），适用于队员（无 token）读取
   return `${JSDELIVR_CDN}/${GITHUB_REPO}@main/${getTeamDataPath()}`;
 }
 
@@ -1010,10 +1011,25 @@ function purgeJsDelivrCache() {
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
   try {
-    // Read file content via jsDelivr CDN (有国内节点，速度快)
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-    const resp = await fetch(githubRawUrl(), { signal: controller.signal });
+    // 队长（有 token）走 GitHub API 直读（永远最新，无 CDN 缓存）
+    // 队员（无 token）走 jsDelivr CDN（国内速度快）
+    let resp;
+    if (githubToken) {
+      resp = await fetch(githubApiUrl(), {
+        headers: githubHeaders(true),
+        signal: controller.signal,
+      });
+      if (resp.ok) {
+        // GitHub API returns { sha, content (base64), ... }, need to decode
+        const data = await resp.json();
+        const raw = atob(data.content);
+        resp = { status: resp.status, ok: resp.ok, json: () => JSON.parse(raw) };
+      }
+    } else {
+      resp = await fetch(githubRawUrl(), { signal: controller.signal });
+    }
     clearTimeout(timeoutId);
     if (resp.status === 404) return false;
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -1056,10 +1072,13 @@ function disconnectCloud() {
   showToast('已断开连接，切换至本地模式', 'info');
 }
 
+let lastWriteTime = 0; // 上次写入时间，防止轮询覆盖
+
 function startSyncTimer() {
   stopSyncTimer();
   syncTimer = setInterval(() => {
-    if (cloudConnected && state.teamId) {
+    // 写入后 5 秒内跳过轮询，避免读到旧缓存覆盖新数据
+    if (cloudConnected && state.teamId && Date.now() - lastWriteTime > 5000) {
       fetchFromCloud(true);
     }
   }, SYNC_INTERVAL);
