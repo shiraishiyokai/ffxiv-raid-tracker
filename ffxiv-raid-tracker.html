@@ -894,6 +894,7 @@ function loadState() {
 
 function saveLocal() {
   try {
+    state.lastModified = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {
     showToast('⚠️ 本地存储已满，请导出数据备份', 'error');
@@ -962,6 +963,10 @@ async function syncToCloud() {
       } catch (_) {}
     }
 
+    // 上传前更新时间戳，确保云端数据比本地旧时不被覆盖
+    state.lastModified = Date.now();
+    saveLocal();
+
     const body = {
       message: `update ${getTeamDataPath()}`,
       content: btoa(unescape(encodeURIComponent(JSON.stringify(state)))),
@@ -1028,6 +1033,13 @@ async function fetchFromCloud(silent) {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const content = await resp.json();
     if (content && content.version && content.days) {
+      // 时间戳保护：云端数据比本地旧则不覆盖
+      const cloudTime = content.lastModified || 0;
+      const localTime = state.lastModified || 0;
+      if (cloudTime < localTime) {
+        console.log('云端数据比本地旧，跳过覆盖');
+        return false;
+      }
       const cloudStr = JSON.stringify(content);
       if (cloudStr !== lastCloudFetch) {
         const localPresets = state.mistakePresets;
