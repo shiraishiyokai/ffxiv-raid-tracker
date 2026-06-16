@@ -1060,11 +1060,13 @@ async function fetchFromCloud(silent) {
   if (!content) return false;
 
   // 时间戳保护：云端数据比本地旧则不覆盖
+  // 但如果本地是空的（新浏览器/清缓存后），始终用云端数据
   const cloudTime = content.lastModified || 0;
   const localTime = state.lastModified || 0;
-  console.log('[fetchFromCloud] 来源:', source, '云端 lastModified:', new Date(cloudTime).toLocaleString(), '本地 lastModified:', new Date(localTime).toLocaleString());
-  if (cloudTime < localTime) {
-    console.log('[fetchFromCloud] 云端数据比本地旧，跳过覆盖');
+  const localHasData = Object.keys(state.days || {}).length > 0;
+  console.log('[fetchFromCloud] 云端 lastModified:', new Date(cloudTime).toLocaleString(), '本地 lastModified:', new Date(localTime).toLocaleString(), '本地有数据:', localHasData);
+  if (cloudTime < localTime && localHasData) {
+    console.log('[fetchFromCloud] 云端数据比本地旧且本地有数据，跳过覆盖');
     return false;
   }
   const cloudStr = JSON.stringify(content);
