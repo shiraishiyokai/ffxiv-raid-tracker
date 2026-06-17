@@ -944,56 +944,63 @@ function githubHeaders(forWrite) {
 async function syncToCloud() {
   if (!state.teamId) return;
   try {
-    // 上传前必须先拉取云端最新数据，以云端为基础叠加本地备注改动
-    // 如果拉取失败则不上传，避免覆盖他人修改
-    let mergeBase = null;
-    let cloudFetchFailed = false;
-    try {
-      const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
-      if (getResp.ok) {
-        const getData = await getResp.json();
-        cloudFileSha = getData.sha;
-        const raw = decodeURIComponent(escape(atob(getData.content)));
-        mergeBase = JSON.parse(raw);
-      } else if (getResp.status !== 404) {
-        // 非 404 的错误（403 限流、500 等），标记拉取失败
+    // 队长：直接上传本地数据（队长是数据源）
+    // 队员：先拉取云端作为基础，只叠加备注改动，避免覆盖队长记录
+    if (!isCaptain()) {
+      let mergeBase = null;
+      let cloudFetchFailed = false;
+      try {
+        const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
+        if (getResp.ok) {
+          const getData = await getResp.json();
+          cloudFileSha = getData.sha;
+          const raw = decodeURIComponent(escape(atob(getData.content)));
+          mergeBase = JSON.parse(raw);
+        } else if (getResp.status !== 404) {
+          cloudFetchFailed = true;
+        }
+      } catch (_) {
         cloudFetchFailed = true;
       }
-      // 404 表示云端还没数据文件，mergeBase 为 null，后面用本地数据
-    } catch (_) {
-      cloudFetchFailed = true;
-    }
 
-    if (cloudFetchFailed) {
-      showToast('⚠️ 无法获取云端最新数据，请稍后再试', 'error');
-      return;
-    }
+      if (cloudFetchFailed) {
+        showToast('⚠️ 无法获取云端最新数据，请稍后再试', 'error');
+        return;
+      }
 
-    // 404（云端无数据）时以本地数据为基础
-    if (!mergeBase) {
-      // 直接用本地 state 上传（新队伍首次保存）
-      // 不做合并，直接跳到上传步骤
-    } else {
-      // 以云端数据为基础，叠加本地备注改动
-      for (const [dateKey, localDay] of Object.entries(state.days || {})) {
-        if (!mergeBase.days[dateKey]) continue;
-        for (const [memberKey, localMember] of Object.entries(localDay.members || {})) {
-          const baseMember = mergeBase.days[dateKey].members[memberKey];
-          if (!baseMember) continue;
-          for (const localM of localMember.mistakes) {
-            const baseM = baseMember.mistakes.find(cm => cm.id === localM.id);
-            if (baseM && localM.tips && localM.tips !== (baseM.tips || '')) {
-              baseM.tips = localM.tips;
-              baseM.tipsBy = localM.tipsBy;
+      if (mergeBase) {
+        // 以云端为基础，只叠加队员的备注改动
+        for (const [dateKey, localDay] of Object.entries(state.days || {})) {
+          if (!mergeBase.days[dateKey]) continue;
+          for (const [memberKey, localMember] of Object.entries(localDay.members || {})) {
+            const baseMember = mergeBase.days[dateKey].members[memberKey];
+            if (!baseMember) continue;
+            for (const localM of localMember.mistakes) {
+              const baseM = baseMember.mistakes.find(cm => cm.id === localM.id);
+              if (baseM && localM.tips && localM.tips !== (baseM.tips || '')) {
+                baseM.tips = localM.tips;
+                baseM.tipsBy = localM.tipsBy;
+              }
             }
           }
         }
+        mergeBase.teamId = state.teamId;
+        mergeBase.teamName = state.teamName;
+        state = mergeBase;
+        saveLocal();
       }
-
-      mergeBase.teamId = state.teamId;
-      mergeBase.teamName = state.teamName;
-      state = mergeBase;
-      saveLocal();
+      // 404用本地数据上传，continue
+    } else {
+      // 队长直接上传本地数据，但先获取最新 SHA 避免 409
+      if (!cloudFileSha) {
+        try {
+          const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
+          if (getResp.ok) {
+            const getData = await getResp.json();
+            cloudFileSha = getData.sha;
+          }
+        } catch (_) {}
+      }
     }
 
     // 上传前更新时间戳，确保云端数据比本地旧时不被覆盖
