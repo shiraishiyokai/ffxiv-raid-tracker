@@ -2021,10 +2021,10 @@ function buildSummaryText(date) {
       const role = ROLES[key];
       const name = state.memberNames[key] || key;
       if (!member.mistakes || member.mistakes.length === 0) {
-        lines.push(`${role.icon} ${key} — ${name}: 干净 ✨`);
+        lines.push(`${roleEmoji[group.role]} ${key} — ${name}: 干净 ✨`);
       } else {
         const total = member.mistakes.reduce((s, m) => s + (m.count || 1), 0);
-        lines.push(`${role.icon} ${key} — ${name}: ${total} 次犯错`);
+        lines.push(`${roleEmoji[group.role]} ${key} — ${name}: ${total} 次犯错`);
         for (const m of member.mistakes) {
           lines.push(`  • ${m.description} (×${m.count || 1})`);
           if (m.tips && m.tips.trim()) {
