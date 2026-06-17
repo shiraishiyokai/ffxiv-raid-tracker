@@ -946,7 +946,8 @@ function githubHeaders(forWrite) {
 async function syncToCloud() {
   if (!state.teamId) return;
   try {
-    // 上传前先拉取云端最新数据，避免覆盖他人修改
+    // 上传前先拉取云端最新数据，以云端为基础，只叠加上本地的备注改动
+    // 这样队长的增删记录不会丢失
     try {
       const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
       if (getResp.ok) {
@@ -954,23 +955,33 @@ async function syncToCloud() {
         cloudFileSha = getData.sha;
         const raw = decodeURIComponent(escape(atob(getData.content)));
         const cloudData = JSON.parse(raw);
-        // 合并：云端有而本地没有的备注，保留云端版本
-        for (const [dateKey, cloudDay] of Object.entries(cloudData.days || {})) {
-          if (!state.days[dateKey]) continue;
-          for (const [memberKey, cloudMember] of Object.entries(cloudDay.members || {})) {
-            const localMember = state.days[dateKey].members[memberKey];
-            if (!localMember) continue;
-            for (let i = 0; i < localMember.mistakes.length; i++) {
-              const localM = localMember.mistakes[i];
-              const cloudM = cloudMember.mistakes.find(cm => cm.id === localM.id);
-              if (cloudM && cloudM.tips && !localM.tips) {
-                // 云端有备注但本地没有，保留云端的
-                localM.tips = cloudM.tips;
-                localM.tipsBy = cloudM.tipsBy;
+
+        // 以云端数据为基础
+        const base = cloudData;
+
+        // 把本地修改过的备注叠加到云端数据上
+        for (const [dateKey, localDay] of Object.entries(state.days || {})) {
+          if (!base.days[dateKey]) continue;
+          for (const [memberKey, localMember] of Object.entries(localDay.members || {})) {
+            const baseMember = base.days[dateKey].members[memberKey];
+            if (!baseMember) continue;
+            for (const localM of localMember.mistakes) {
+              const baseM = baseMember.mistakes.find(cm => cm.id === localM.id);
+              if (baseM && localM.tips && localM.tips !== (baseM.tips || '')) {
+                // 本地备注有改动，覆盖云端
+                baseM.tips = localM.tips;
+                baseM.tipsBy = localM.tipsBy;
               }
             }
           }
         }
+
+        // 保留本地的 teamId 和 teamName
+        base.teamId = state.teamId;
+        base.teamName = state.teamName;
+        // 用合并后的数据替换本地 state
+        state = base;
+        saveLocal();
       }
     } catch (_) {}
 
