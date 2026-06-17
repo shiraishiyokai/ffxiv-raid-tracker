@@ -592,6 +592,7 @@ body.member-mode .captain-only { display: none !important; }
     <span id="connActions">
       <button id="manualSyncBtn" class="btn btn-small btn-primary captain-only" style="display:none;">☁️ 保存到云端</button>
       <button id="copyBlobIdBtn" class="btn btn-small captain-only" style="display:none;">📋 复制分享链接</button>
+      <button id="newTeamBtn" class="btn btn-small captain-only">🆕 新建队伍</button>
       <button id="disconnectBtn" class="btn btn-small btn-danger captain-only" style="display:none;">断开</button>
     </span>
   </div>
@@ -1059,14 +1060,18 @@ async function fetchFromCloud(silent) {
 
   if (!content) return false;
 
-  // 时间戳保护：云端数据比本地旧则不覆盖
-  // 但如果本地是空的（新浏览器/清缓存后），始终用云端数据
+  // 时间戳保护：本地有实际数据且比云端新时才跳过
+  // 本地为空（新浏览器/清缓存后）始终接受云端数据
   const cloudTime = content.lastModified || 0;
   const localTime = state.lastModified || 0;
-  const localHasData = Object.keys(state.days || {}).length > 0;
-  console.log('[fetchFromCloud] 云端 lastModified:', new Date(cloudTime).toLocaleString(), '本地 lastModified:', new Date(localTime).toLocaleString(), '本地有数据:', localHasData);
-  if (cloudTime < localTime && localHasData) {
-    console.log('[fetchFromCloud] 云端数据比本地旧且本地有数据，跳过覆盖');
+  const localHasRealData = Object.values(state.days || {}).some(d =>
+    Object.values(d.members || {}).some(m => (m.mistakes || []).length > 0) ||
+    (d.teamIssues || []).length > 0 ||
+    d.furthestPhase || d.generalNotes
+  );
+  console.log('[fetchFromCloud] 云端:', new Date(cloudTime).toLocaleString(), '本地:', new Date(localTime).toLocaleString(), '本地有实质数据:', localHasRealData);
+  if (cloudTime < localTime && localHasRealData) {
+    console.log('[fetchFromCloud] 本地有实质数据且比云端新，跳过覆盖');
     return false;
   }
   const cloudStr = JSON.stringify(content);
@@ -1503,6 +1508,38 @@ function submitQuickRecord() {
 // --- Connection bar ---
 document.getElementById('copyBlobIdBtn').addEventListener('click', copyBlobId);
 document.getElementById('disconnectBtn').addEventListener('click', disconnectCloud);
+document.getElementById('newTeamBtn').addEventListener('click', async function() {
+  if (!confirm('创建新队伍？当前队伍数据仍保留在云端，可随时通过链接切换回来。')) return;
+  // 清除本地 teamId，创建全新队伍
+  state.teamId = 'team-' + Date.now().toString(36);
+  state.teamName = '我的队伍';
+  state.days = {};
+  state.memberNames = { MT:'', ST:'', H1:'', H2:'', D1:'', D2:'', D3:'', D4:'' };
+  cloudFileSha = '';
+  cloudConnected = false;
+  saveLocal();
+  // 更新 URL
+  const url = new URL(window.location);
+  url.searchParams.set('team', state.teamId);
+  url.hash = 'captain';
+  window.history.replaceState({}, '', url);
+  // 同步到云端
+  setConnStatus('syncing', '创建新队伍...');
+  renderConnectionBar();
+  renderAll();
+  try {
+    await syncToCloud();
+    cloudConnected = true;
+    setConnStatus('online', '');
+    renderConnectionBar();
+    startSyncTimer();
+    showToast('✅ 新队伍已创建！点击「📋 复制分享链接」发给队员', 'success');
+  } catch (e) {
+    setConnStatus('local', '');
+    renderConnectionBar();
+    showToast('❌ 创建失败: ' + e.message, 'error');
+  }
+});
 document.getElementById('manualSyncBtn').addEventListener('click', async function() {
   if (!state.teamId) {
     showToast('⚠️ 未连接云端', 'error');
