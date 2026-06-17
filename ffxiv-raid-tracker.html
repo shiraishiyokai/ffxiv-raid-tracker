@@ -733,7 +733,6 @@ const ICONS = {
 const SYNC_INTERVAL = 15000;
 const MEMBER_SYNC_INTERVAL = 120000; // 队员轮询间隔 2 分钟
 const GITHUB_API = 'https://api.github.com';
-const GITHUB_RAW = 'https://raw.githubusercontent.com';
 const FETCH_TIMEOUT = 20000; // 20秒超时
 
 // 仓库地址从 URL 参数 ?repo=user/repo 读取，默认值方便开发
@@ -1010,10 +1009,38 @@ async function syncToCloud() {
       lastCloudFetch = JSON.stringify(state);
       lastWriteTime = Date.now(); // 记录写入时间，防止轮询覆盖
       cloudConnected = true;
-      // 刷新 jsDelivr CDN 缓存，确保队员读取到最新数据
-      purgeJsDelivrCache();
       // 显示"已同步"状态，3 秒后恢复
       showSavedStatus();
+    } else if (resp.status === 409) {
+      // SHA 冲突，重新拉取最新数据后重试一次
+      console.log('[syncToCloud] SHA 冲突，重新拉取后重试');
+      cloudFileSha = '';
+      try {
+        const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
+        if (getResp.ok) {
+          const getData = await getResp.json();
+          cloudFileSha = getData.sha;
+          // 重试上传
+          body.sha = cloudFileSha;
+          const retryResp = await fetch(githubApiUrl(), {
+            method: 'PUT',
+            headers: githubHeaders(true),
+            body: JSON.stringify(body),
+          });
+          if (retryResp.ok) {
+            const retryData = await retryResp.json();
+            cloudFileSha = retryData.content.sha;
+            lastCloudFetch = JSON.stringify(state);
+            lastWriteTime = Date.now();
+            cloudConnected = true;
+            showSavedStatus();
+          } else {
+            throw new Error('重试仍失败: ' + retryResp.status);
+          }
+        }
+      } catch (retryErr) {
+        showToast('❌ 保存冲突，请稍后再试', 'error');
+      }
     } else {
       const err = await resp.json().catch(() => ({}));
       console.error('syncToCloud error:', resp.status, err);
@@ -1029,28 +1056,6 @@ async function syncToCloud() {
     renderConnectionBar();
     showToast('❌ 网络异常，数据仅保存在本地: ' + e.message, 'error');
   }
-}
-
-function githubRawUrl() {
-  // raw.githubusercontent.com（永远最新，队员用）
-  return `${GITHUB_RAW}/${GITHUB_REPO}/main/${getTeamDataPath()}`;
-}
-
-function purgeJsDelivrCache() {
-  // 写入后刷新 jsDelivr CDN，仅作为辅助加速
-  const path = getTeamDataPath();
-  const purgeUrl = `https://purge.jsdelivr.net/gh/${GITHUB_REPO}@main/${path}`;
-  fetch(purgeUrl).catch(() => {});
-}
-
-// 从单个 URL 尝试读取云端数据
-async function tryFetchCloudData(url, headers, signal) {
-  const resp = await fetch(url, { headers: headers || {}, signal });
-  if (resp.status === 404) return null;
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-  const content = await resp.json();
-  if (content && content.version && content.days) return content;
-  return null;
 }
 
 // 通过 GitHub API 读取文件内容（无论有无 token）
