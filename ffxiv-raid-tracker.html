@@ -1086,12 +1086,13 @@ async function fetchFromCloud(silent) {
   let content = null;
 
 
-  // 统一走 GitHub API 读取（永远最新，无 CDN 缓存问题）
+  // GitHub API 加上时间戳避免浏览器缓存返回旧数据
   try {
     const c = new AbortController();
     const t = setTimeout(() => c.abort(), FETCH_TIMEOUT);
     const headers = githubHeaders(false);
-    const resp = await fetch(githubApiUrl(), { headers, signal: c.signal });
+    const url = githubApiUrl() + '?_=' + Date.now();
+    const resp = await fetch(url, { headers, signal: c.signal });
     clearTimeout(t);
     if (resp.ok) {
       const data = await resp.json();
