@@ -944,44 +944,44 @@ function githubHeaders(forWrite) {
 async function syncToCloud() {
   if (!state.teamId) return;
   try {
-    // 上传前先拉取云端最新数据，以云端为基础，只叠加上本地的备注改动
-    // 这样队长的增删记录不会丢失
+    // 上传前必须先拉取云端最新数据，以云端为基础叠加本地备注改动
+    // 如果拉取失败则不上传，避免覆盖他人修改
+    let mergeBase = null;
     try {
       const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
       if (getResp.ok) {
         const getData = await getResp.json();
         cloudFileSha = getData.sha;
         const raw = decodeURIComponent(escape(atob(getData.content)));
-        const cloudData = JSON.parse(raw);
-
-        // 以云端数据为基础
-        const base = cloudData;
-
-        // 把本地修改过的备注叠加到云端数据上
-        for (const [dateKey, localDay] of Object.entries(state.days || {})) {
-          if (!base.days[dateKey]) continue;
-          for (const [memberKey, localMember] of Object.entries(localDay.members || {})) {
-            const baseMember = base.days[dateKey].members[memberKey];
-            if (!baseMember) continue;
-            for (const localM of localMember.mistakes) {
-              const baseM = baseMember.mistakes.find(cm => cm.id === localM.id);
-              if (baseM && localM.tips && localM.tips !== (baseM.tips || '')) {
-                // 本地备注有改动，覆盖云端
-                baseM.tips = localM.tips;
-                baseM.tipsBy = localM.tipsBy;
-              }
-            }
-          }
-        }
-
-        // 保留本地的 teamId 和 teamName
-        base.teamId = state.teamId;
-        base.teamName = state.teamName;
-        // 用合并后的数据替换本地 state
-        state = base;
-        saveLocal();
+        mergeBase = JSON.parse(raw);
       }
     } catch (_) {}
+
+    if (!mergeBase) {
+      showToast('⚠️ 无法获取云端最新数据，请稍后再试', 'error');
+      return;
+    }
+
+    // 以云端数据为基础，叠加本地备注改动
+    for (const [dateKey, localDay] of Object.entries(state.days || {})) {
+      if (!mergeBase.days[dateKey]) continue;
+      for (const [memberKey, localMember] of Object.entries(localDay.members || {})) {
+        const baseMember = mergeBase.days[dateKey].members[memberKey];
+        if (!baseMember) continue;
+        for (const localM of localMember.mistakes) {
+          const baseM = baseMember.mistakes.find(cm => cm.id === localM.id);
+          if (baseM && localM.tips && localM.tips !== (baseM.tips || '')) {
+            baseM.tips = localM.tips;
+            baseM.tipsBy = localM.tipsBy;
+          }
+        }
+      }
+    }
+
+    mergeBase.teamId = state.teamId;
+    mergeBase.teamName = state.teamName;
+    state = mergeBase;
+    saveLocal();
 
     // 上传前更新时间戳，确保云端数据比本地旧时不被覆盖
     state.lastModified = Date.now();
