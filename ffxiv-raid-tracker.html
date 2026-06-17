@@ -1092,11 +1092,23 @@ async function fetchFromCloud(silent) {
 
   if (!content) return false;
 
-  // 始终用云端数据覆盖本地，保证数据一致性
-  // 只有云端拉取失败时才保留本地数据
+  // 始终用云端数据覆盖本地，但保护用户正在编辑的备注
   const cloudStr = JSON.stringify(content);
   if (cloudStr !== lastCloudFetch) {
-    console.log('[fetchFromCloud] 云端数据有变化，覆盖本地');
+    console.log('[fetchFromCloud] 云端数据有变化，合并本地');
+
+    // 收集当前正在编辑的备注（textarea 中有内容但还没保存的）
+    const editingTips = {};
+    document.querySelectorAll('.tips-textarea').forEach(ta => {
+      const member = ta.dataset.member;
+      const mid = ta.dataset.mistakeId;
+      const val = ta.value.trim();
+      if (member && mid && val) {
+        if (!editingTips[member]) editingTips[member] = {};
+        editingTips[member][mid] = val;
+      }
+    });
+
     const localPresets = state.mistakePresets;
     const localTeamId = state.teamId;
     const localTeamName = state.teamName;
@@ -1104,6 +1116,22 @@ async function fetchFromCloud(silent) {
     if (!state.mistakePresets) state.mistakePresets = localPresets;
     state.teamId = localTeamId;
     state.teamName = localTeamName;
+
+    // 恢复正在编辑的备注（不被云端覆盖）
+    for (const [member, tips] of Object.entries(editingTips)) {
+      for (const [mid, val] of Object.entries(tips)) {
+        for (const day of Object.values(state.days)) {
+          const m = day.members[member];
+          if (m) {
+            const mistake = m.mistakes.find(x => x.id === mid);
+            if (mistake && val !== (mistake.tips || '').trim()) {
+              mistake.tips = val;
+            }
+          }
+        }
+      }
+    }
+
     saveLocal();
     lastCloudFetch = cloudStr;
     if (!silent) renderAll();
@@ -1131,8 +1159,8 @@ function startSyncTimer() {
   stopSyncTimer();
   // 队长用短间隔，队员用长间隔
   syncTimer = setInterval(() => {
-    // 写入后 30 秒内跳过轮询，避免 CDN 旧缓存覆盖新数据
-    if (cloudConnected && state.teamId && Date.now() - lastWriteTime > 30000) {
+    // 写入后 5 秒内跳过轮询
+    if (cloudConnected && state.teamId && Date.now() - lastWriteTime > 5000) {
       fetchFromCloud(true);
     }
   }, isCaptain() ? SYNC_INTERVAL : MEMBER_SYNC_INTERVAL);
