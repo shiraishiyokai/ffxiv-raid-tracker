@@ -1028,8 +1028,8 @@ async function tryFetchCloudData(url, headers, signal) {
 // 通过 GitHub API 读取文件内容（无论有无 token）
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
-  // 写入冷却期内跳过云端读取
-  if (Date.now() - lastWriteTime < 30000) return false;
+  // 写入冷却期内跳过云端读取（防止刚上传的数据被旧缓存覆盖）
+  if (lastWriteTime && Date.now() - lastWriteTime < 5000) return false;
 
   let content = null;
 
@@ -1060,20 +1060,8 @@ async function fetchFromCloud(silent) {
 
   if (!content) return false;
 
-  // 时间戳保护：本地有实际数据且比云端新时才跳过
-  // 本地为空（新浏览器/清缓存后）始终接受云端数据
-  const cloudTime = content.lastModified || 0;
-  const localTime = state.lastModified || 0;
-  const localHasRealData = Object.values(state.days || {}).some(d =>
-    Object.values(d.members || {}).some(m => (m.mistakes || []).length > 0) ||
-    (d.teamIssues || []).length > 0 ||
-    d.furthestPhase || d.generalNotes
-  );
-  console.log('[fetchFromCloud] 云端:', new Date(cloudTime).toLocaleString(), '本地:', new Date(localTime).toLocaleString(), '本地有实质数据:', localHasRealData);
-  if (cloudTime < localTime && localHasRealData) {
-    console.log('[fetchFromCloud] 本地有实质数据且比云端新，跳过覆盖');
-    return false;
-  }
+  // 始终用云端数据覆盖本地，保证数据一致性
+  // 只有云端拉取失败时才保留本地数据
   const cloudStr = JSON.stringify(content);
   if (cloudStr !== lastCloudFetch) {
     console.log('[fetchFromCloud] 云端数据有变化，覆盖本地');
@@ -1089,7 +1077,6 @@ async function fetchFromCloud(silent) {
     if (!silent) renderAll();
     return true;
   }
-  lastCloudFetch = JSON.stringify(state);
   return false;
 }
 
