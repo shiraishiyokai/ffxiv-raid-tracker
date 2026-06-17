@@ -1992,6 +1992,13 @@ async function init() {
 
   // Cloud connection — async, non-blocking
   if (state.teamId) {
+    // 已有 teamId，始终把 teamId 同步到 URL，方便查看和分享
+    const url = new URL(window.location);
+    if (url.searchParams.get('team') !== state.teamId) {
+      url.searchParams.set('team', state.teamId);
+      if (isCaptain() && !url.hash) url.hash = 'captain';
+      window.history.replaceState({}, '', url);
+    }
     // 已有 teamId 和本地数据，先标记在线（本地数据立即可用），后台同步
     cloudConnected = true;
     setConnStatus('online', '');
