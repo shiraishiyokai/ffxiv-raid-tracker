@@ -342,17 +342,17 @@ body.member-mode .captain-only { display: none !important; }
 .member-card .member-name-input {
   background: transparent; border: 1px solid transparent; color: var(--text-primary);
   font-size: 0.95rem; font-weight: 600; padding: 2px 4px; border-radius: 3px;
-  font-family: inherit; max-width: 120px; cursor: pointer;
+  font-family: inherit; flex: 1; min-width: 0; max-width: 120px; cursor: pointer;
   transition: all var(--transition-fast);
 }
 .member-card .member-name-input:hover { border-color: var(--border-color); }
 .member-card .member-name-input:focus { border-color: var(--accent-gold); outline: none; cursor: text; background: var(--bg-input); }
 .member-card .member-name-input.member-readonly { border: none; cursor: default; pointer-events: none; opacity: 0.9; }
-.member-card .member-name-row { display: flex; gap: 6px; align-items: center; }
+.member-card .member-name-row { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
 .member-card .job-select {
-  font-size: 0.75rem; padding: 2px 4px; border-radius: 4px;
+  font-size: 0.72rem; padding: 2px 4px; border-radius: 4px;
   background: var(--bg-input); color: var(--text-secondary); border: 1px solid var(--border-color);
-  cursor: pointer; max-width: 90px;
+  cursor: pointer; flex-shrink: 0;
 }
 .member-card .job-select.member-readonly { border: none; background: transparent; pointer-events: none; opacity: 0.8; -webkit-appearance: none; appearance: none; }
 .member-card .job-select:focus { outline: none; border-color: var(--accent-gold); }
@@ -1335,18 +1335,12 @@ function renderMemberCards() {
       html += `<div class="member-role">${key} · ${JOBS[state.memberJobs[key] || 'GNB'].label}</div>`;
       html += `<div class="member-name-row">`;
       html += `<input class="member-name-input${isCaptain() ? '' : ' member-readonly'}" data-member="${key}" value="${escapeHtml(name)}" placeholder="${isCaptain() ? '点击输入名字' : ''}" title="${isCaptain() ? '点击编辑队员名字' : ''}" ${isCaptain() ? '' : 'readonly'}>`;
-      // 职业下拉菜单
+      // 职业下拉菜单（只显示对应职能的职业）
       const currentJob = state.memberJobs[key] || 'GNB';
+      const roleJobs = Object.entries(JOBS).filter(([_, v]) => v.role === ROLES[key].role).map(([k]) => k);
+      const defaultJob = roleJobs[0] || 'GNB';
       html += `<select class="job-select${isCaptain() ? '' : ' member-readonly'}" data-member="${key}" ${isCaptain() ? '' : 'disabled'}>`;
-      html += `<optgroup label="🛡️ 坦克">`;
-      for (const j of ['PLD','WAR','GNB','DRK']) html += `<option value="${j}"${j===currentJob?' selected':''}>${JOBS[j].label}</option>`;
-      html += `</optgroup>`;
-      html += `<optgroup label="💚 治疗">`;
-      for (const j of ['WHM','SCH','AST','SGE']) html += `<option value="${j}"${j===currentJob?' selected':''}>${JOBS[j].label}</option>`;
-      html += `</optgroup>`;
-      html += `<optgroup label="⚔️ 输出">`;
-      for (const j of ['MNK','DRG','NIN','SAM','RDM','BLM','SMN','MCH','BRD','DNC','VPR','PCT','RPR']) html += `<option value="${j}"${j===currentJob?' selected':''}>${JOBS[j].label}</option>`;
-      html += `</optgroup>`;
+      for (const j of roleJobs) html += `<option value="${j}"${j===currentJob?' selected':''}>${JOBS[j].label}</option>`;
       html += `</select>`;
       html += `</div>`;
       html += `</div>`;
