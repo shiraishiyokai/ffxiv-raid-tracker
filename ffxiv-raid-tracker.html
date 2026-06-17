@@ -908,8 +908,7 @@ function getActiveDay() {
 
 function saveState() {
   saveLocal();
-  // 自动同步到云端（队长和队员修改后都自动上传）
-  if (debouncedSaveToCloud) debouncedSaveToCloud();
+  // 不同步云端，需手动点击「☁️ 保存到云端」按钮
 }
 
 // ============================================================
