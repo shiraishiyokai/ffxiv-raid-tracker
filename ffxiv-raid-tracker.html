@@ -590,7 +590,7 @@ body.member-mode .captain-only { display: none !important; }
     <span class="conn-status"><span id="connDot" class="conn-dot local"></span><span id="connLabel">本地模式</span></span>
     <span id="blobIdDisplay"></span>
     <span id="connActions">
-      <button id="manualSyncBtn" class="btn btn-small btn-primary captain-only" style="display:none;">☁️ 保存到云端</button>
+      <button id="manualSyncBtn" class="btn btn-small btn-primary" style="display:none;">☁️ 保存到云端</button>
       <button id="copyBlobIdBtn" class="btn btn-small captain-only" style="display:none;">📋 复制分享链接</button>
       <button id="newTeamBtn" class="btn btn-small captain-only">🆕 新建队伍</button>
       <button id="disconnectBtn" class="btn btn-small btn-danger captain-only" style="display:none;">断开</button>
@@ -909,7 +909,8 @@ function getActiveDay() {
 
 function saveState() {
   saveLocal();
-  // 不再自动同步云端，队长需手动点击「☁️ 保存到云端」按钮
+  // 自动同步到云端（队长和队员修改后都自动上传）
+  if (debouncedSaveToCloud) debouncedSaveToCloud();
 }
 
 // ============================================================
@@ -945,17 +946,33 @@ function githubHeaders(forWrite) {
 async function syncToCloud() {
   if (!state.teamId) return;
   try {
-    // GET the file's SHA via API (with token to avoid rate limit)
-    if (!cloudFileSha) {
-      try {
-        const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(true) });
-        if (getResp.ok) {
-          const getData = await getResp.json();
-          cloudFileSha = getData.sha;
+    // 上传前先拉取云端最新数据，避免覆盖他人修改
+    try {
+      const getResp = await fetch(githubApiUrl(), { headers: githubHeaders(false) });
+      if (getResp.ok) {
+        const getData = await getResp.json();
+        cloudFileSha = getData.sha;
+        const raw = decodeURIComponent(escape(atob(getData.content)));
+        const cloudData = JSON.parse(raw);
+        // 合并：云端有而本地没有的备注，保留云端版本
+        for (const [dateKey, cloudDay] of Object.entries(cloudData.days || {})) {
+          if (!state.days[dateKey]) continue;
+          for (const [memberKey, cloudMember] of Object.entries(cloudDay.members || {})) {
+            const localMember = state.days[dateKey].members[memberKey];
+            if (!localMember) continue;
+            for (let i = 0; i < localMember.mistakes.length; i++) {
+              const localM = localMember.mistakes[i];
+              const cloudM = cloudMember.mistakes.find(cm => cm.id === localM.id);
+              if (cloudM && cloudM.tips && !localM.tips) {
+                // 云端有备注但本地没有，保留云端的
+                localM.tips = cloudM.tips;
+                localM.tipsBy = cloudM.tipsBy;
+              }
+            }
+          }
         }
-        // 404 is fine — file doesn't exist yet
-      } catch (_) {}
-    }
+      }
+    } catch (_) {}
 
     // 上传前更新时间戳，确保云端数据比本地旧时不被覆盖
     state.lastModified = Date.now();
@@ -1187,6 +1204,11 @@ function renderConnectionBar() {
   if (isCaptain() && state.teamId) {
     copyBtn.style.display = '';
     disconnectBtn.style.display = '';
+    if (manualSyncBtn) manualSyncBtn.style.display = '';
+  } else if (state.teamId) {
+    // 队员也能保存备注到云端
+    copyBtn.style.display = 'none';
+    disconnectBtn.style.display = 'none';
     if (manualSyncBtn) manualSyncBtn.style.display = '';
   } else {
     copyBtn.style.display = 'none';
