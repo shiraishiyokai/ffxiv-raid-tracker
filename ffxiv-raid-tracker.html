@@ -752,8 +752,6 @@ const JOB_ICONS = {
 };
 
 
-const SYNC_INTERVAL = 15000;
-const MEMBER_SYNC_INTERVAL = 120000; // 队员轮询间隔 2 分钟
 const GITHUB_API = 'https://api.github.com';
 const FETCH_TIMEOUT = 20000; // 20秒超时
 
@@ -867,7 +865,6 @@ function isoAddDays(iso, n) {
 let state = null;
 let activeDate = todayISO();
 let selectedMember = null; // Quick bar selection
-let syncTimer = null;
 let cloudConnected = false;
 let lastCloudFetch = '';
 let debouncedSaveToCloud = null;
@@ -1129,8 +1126,7 @@ async function syncToCloud() {
 // 通过 GitHub API 读取文件内容（无论有无 token）
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
-  // 写入冷却期内跳过云端读取（防止刚上传的数据被旧缓存覆盖）
-  if (lastWriteTime && Date.now() - lastWriteTime < 5000) return false;
+  // 已移除轮询冷却检查
 
   let content = null;
 
@@ -1198,22 +1194,10 @@ function disconnectCloud() {
   showToast('已断开连接，切换至本地模式', 'info');
 }
 
-let lastWriteTime = 0; // 上次写入时间，防止轮询覆盖
+let lastWriteTime = 0;
 
-function startSyncTimer() {
-  stopSyncTimer();
-  // 队长用短间隔，队员用长间隔
-  syncTimer = setInterval(() => {
-    // 写入后 5 秒内跳过轮询
-    if (cloudConnected && state.teamId && Date.now() - lastWriteTime > 5000) {
-      fetchFromCloud(true);
-    }
-  }, isCaptain() ? SYNC_INTERVAL : MEMBER_SYNC_INTERVAL);
-}
-
-function stopSyncTimer() {
-  if (syncTimer) { clearInterval(syncTimer); syncTimer = null; }
-}
+function startSyncTimer() { /* 轮询已移除 */ }
+function stopSyncTimer() { /* 轮询已移除 */ }
 
 function setConnStatus(status, extra) {
   const dot = document.getElementById('connDot');
@@ -1658,6 +1642,9 @@ document.getElementById('manualSyncBtn').addEventListener('click', async functio
   renderConnectionBar();
   try {
     await syncToCloud();
+    // 保存成功后自动拉取云端最新数据刷新页面
+    await fetchFromCloud(false);
+    renderAll();
   } catch (e) {
     // syncToCloud 内部已处理错误
   }
@@ -2113,37 +2100,30 @@ async function init() {
   // token 已内置，无需从 localStorage 恢复
 
   applyRole();
-
-  // Render immediately — don't block on network
   activeDate = todayISO();
-  renderAll();
 
-  // Cloud connection — async, non-blocking
+  // Cloud connection — fetch first, then render with latest data
   if (state.teamId) {
-    // 已有 teamId，始终把 teamId 同步到 URL，方便查看和分享
+    // 同步 teamId 到 URL
     const url = new URL(window.location);
     if (url.searchParams.get('team') !== state.teamId) {
       url.searchParams.set('team', state.teamId);
       if (isCaptain() && !url.hash) url.hash = 'captain';
       window.history.replaceState({}, '', url);
     }
-    // 已有 teamId 和本地数据，先标记在线（本地数据立即可用），后台同步
-    cloudConnected = true;
-    setConnStatus('online', '');
+    setConnStatus('syncing', '加载中...');
     renderConnectionBar();
+    // 先拉取云端最新数据，再渲染页面
     fetchFromCloud(false).then(changed => {
-      if (changed) {
-        showToast('📥 已从云端同步最新数据', 'info');
-        renderAll();
-      }
       cloudConnected = true;
       setConnStatus('online', '');
       renderConnectionBar();
-      startSyncTimer();
+      renderAll();
     }).catch(e => {
+      cloudConnected = true;
       setConnStatus('online', '');
       renderConnectionBar();
-      startSyncTimer();
+      renderAll();
     });
   } else if (isCaptain()) {
     // Captain with no team — auto create
