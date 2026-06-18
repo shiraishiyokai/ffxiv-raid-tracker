@@ -1170,10 +1170,12 @@ async function fetchFromCloud(silent) {
     const localPresets = state.mistakePresets;
     const localTeamId = state.teamId;
     const localTeamName = state.teamName;
+    const localMemberJobs = state.memberJobs;
     state = content;
     if (!state.mistakePresets) state.mistakePresets = localPresets;
     state.teamId = localTeamId;
     state.teamName = localTeamName;
+    if (!state.memberJobs) state.memberJobs = localMemberJobs || { MT:'GNB', ST:'PLD', H1:'WHM', H2:'SCH', D1:'SAM', D2:'RPR', D3:'MCH', D4:'RDM' };
 
     saveLocal();
     lastCloudFetch = cloudStr;
