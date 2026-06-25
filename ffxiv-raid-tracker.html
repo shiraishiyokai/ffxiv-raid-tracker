@@ -628,23 +628,39 @@ body.member-mode .captain-only { display: none !important; }
 .fflogs-boss-name { font-weight: 600; }
 .fflogs-boss-count { color: var(--text-muted); font-size: 0.85rem; }
 
-.fflogs-timeline { position: relative; margin-top: var(--space-md); }
-.fflogs-timeline-row { position: relative; height: 24px; border-bottom: 1px solid var(--border-color); }
-.fflogs-timeline-row-label { position: absolute; left: 0; top: 2px; font-size: 0.75rem; color: var(--text-muted); width: 80px; white-space: nowrap; overflow: hidden; }
-.fflogs-timeline-track { position: absolute; left: 85px; right: 0; top: 0; height: 24px; }
-.fflogs-timeline-marker {
-  position: absolute; width: 8px; height: 8px; border-radius: 50%;
-  top: 8px; transform: translateX(-50%); cursor: pointer; z-index: 2;
-  transition: transform var(--transition-fast);
+.fflogs-timeline { margin-top: var(--space-md); }
+.fflogs-timeline-fight-select { margin-bottom: var(--space-sm); font-size: 0.85rem; display: flex; align-items: center; gap: var(--space-sm); }
+.fflogs-timeline-fight-select select { background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); padding: 2px 6px; font-size: 0.8rem; }
+.fflogs-timeline-wrapper {
+  overflow-x: auto; overflow-y: hidden;
+  border: 1px solid var(--border-color); border-radius: var(--border-radius);
+  background: var(--bg-input); cursor: grab; user-select: none;
 }
-.fflogs-timeline-marker:hover { transform: translateX(-50%) scale(1.8); z-index: 3; }
-.fflogs-timeline-separator {
-  position: absolute; width: 1px; height: 24px; top: 0;
-  background: var(--border-color); z-index: 1;
+.fflogs-timeline-wrapper:active { cursor: grabbing; }
+.fflogs-timeline-canvas { position: relative; min-width: 100%; }
+
+.fflogs-tl-row { position: relative; height: 26px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; }
+.fflogs-tl-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
+.fflogs-tl-row-label {
+  width: 120px; min-width: 120px; padding: 0 var(--space-sm);
+  font-size: 0.75rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  border-right: 1px solid var(--border-color); z-index: 2; background: inherit;
 }
-.fflogs-timeline-sep-label { position: absolute; top: -14px; font-size: 0.65rem; color: var(--text-muted); transform: translateX(-50%); }
-.fflogs-timeline-time-axis { position: relative; height: 20px; margin-left: 85px; border-top: 1px solid var(--border-color); }
-.fflogs-timeline-time-label { position: absolute; font-size: 0.65rem; color: var(--text-muted); transform: translateX(-50%); top: 2px; }
+.fflogs-tl-row-label .job-icon { width: 16px; height: 16px; vertical-align: middle; margin-right: 3px; border-radius: 2px; }
+.fflogs-tl-track { position: relative; flex: 1; height: 26px; }
+
+.fflogs-tl-marker {
+  position: absolute; height: 18px; top: 4px; transform: translateX(-50%);
+  border-radius: 3px; cursor: pointer; z-index: 2; font-size: 0.6rem;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255,255,255,0.9); white-space: nowrap; padding: 0 3px;
+  transition: transform 0.1s; min-width: 4px;
+}
+.fflogs-tl-marker:hover { transform: translateX(-50%) scale(1.2); z-index: 5; filter: brightness(1.3); }
+
+.fflogs-tl-time-axis { position: relative; height: 22px; border-top: 1px solid var(--border-color); display: flex; margin-left: 120px; }
+.fflogs-tl-tick { position: absolute; font-size: 0.65rem; color: var(--text-muted); top: 4px; transform: translateX(-50%); }
+.fflogs-tl-tick::before { content: ''; position: absolute; top: -4px; left: 50%; width: 1px; height: 4px; background: var(--border-color); }
 
 .fflogs-tooltip {
   position: fixed; background: var(--bg-card); border: 1px solid var(--border-color);
@@ -664,9 +680,8 @@ body.member-mode .captain-only { display: none !important; }
 @media (max-width: 768px) {
   .fflogs-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .fflogs-death-table { grid-template-columns: repeat(4, 1fr); }
-  .fflogs-timeline-row-label { width: 50px; font-size: 0.65rem; }
-  .fflogs-timeline-track { left: 55px; }
-  .fflogs-timeline-time-axis { margin-left: 55px; }
+  .fflogs-tl-row-label { width: 80px; min-width: 80px; font-size: 0.65rem; }
+  .fflogs-tl-time-axis { margin-left: 80px; }
 }
 @media (max-width: 480px) {
   .fflogs-summary-grid { grid-template-columns: 1fr 1fr; }
@@ -1988,76 +2003,119 @@ function renderFFLogsSection() {
   renderFightList(fl);
 }
 
+let fflogsTimelineFightId = null; // selected fight for timeline
+
 function renderAbilityTimeline(fl) {
   const container = document.getElementById('fflogsTimeline');
   if (!fl.abilityTimeline || fl.abilityTimeline.length === 0) {
-    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">暂无追踪技能数据（需配置追踪技能列表）</p>';
+    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">暂无减伤技能数据</p>';
     return;
   }
 
-  // Group timeline by player+ability
-  const groups = {};
-  for (const item of fl.abilityTimeline) {
-    const key = `${item.player}|${item.ability}`;
-    if (!groups[key]) groups[key] = { player: item.player, ability: item.ability, casts: [] };
-    groups[key].casts.push(item.timestamp);
+  // Fight selector dropdown
+  const fights = fl.fights;
+  if (!fflogsTimelineFightId) fflogsTimelineFightId = fights[0]?.id || null;
+  const roleColors = { tank: '#4169e1', healer: '#2ecc71', dps: '#e74c3c' };
+
+  let html = `<div class="fflogs-timeline-fight-select">
+    <span>查看战斗:</span>
+    <select id="fflogsTimelineFightSelect" onchange="fflogsTimelineFightId=parseInt(this.value);renderAbilityTimeline(getActiveDay().fflogs)">`;
+  for (const f of fights) {
+    const sel = f.id === fflogsTimelineFightId ? ' selected' : '';
+    const result = f.kill ? 'Clear' : `P${f.lastPhase} ${(f.bossPercentage||0).toFixed(0)}%`;
+    html += `<option value="${f.id}"${sel}>#${f.id} ${result}</option>`;
+  }
+  html += '</select></div>';
+
+  // Filter timeline events for selected fight only
+  const timelineItems = fl.abilityTimeline.filter(item => item.fightId === fflogsTimelineFightId);
+  if (timelineItems.length === 0) {
+    html += '<p style="font-size:0.85rem;color:var(--text-muted)">该场战斗无减伤记录</p>';
+    container.innerHTML = html;
+    return;
   }
 
-  const rows = Object.values(groups);
-  // Calculate total time range from fights
-  const maxTime = fl.totalTime || fl.fights.reduce((sum, f) => sum + f.duration, 0);
-  if (maxTime <= 0) { container.innerHTML = '<p style="color:var(--text-muted)">时间范围无效</p>'; return; }
+  // Find the fight duration
+  const currentFight = fights.find(f => f.id === fflogsTimelineFightId);
+  const fightDuration = currentFight ? (currentFight.duration || 300000) : 300000;
+  // Pixel width: 1 second = 5px minimum, scale up for short fights
+  const pxPerMs = Math.max(5 / 1000, 800 / fightDuration);
+  const canvasWidth = Math.max(800, fightDuration * pxPerMs);
 
-  // Build fight separators
-  const fightStarts = [];
-  let cumTime = 0;
-  for (const f of fl.fights) {
-    fightStarts.push({ time: cumTime, id: f.id, kill: f.kill });
-    cumTime += f.duration;
+  // Group by player: each player gets one row with all their mitigation casts
+  const playerCasts = {};
+  for (const item of timelineItems) {
+    if (!playerCasts[item.player]) playerCasts[item.player] = [];
+    playerCasts[item.player].push(item);
   }
 
-  const roleColors = { tank: 'var(--role-tank)', healer: 'var(--role-healer)', dps: 'var(--role-dps)' };
+  // Sort players by role order
+  const roleOrder = { tank: 0, healer: 1, dps: 2 };
+  const sortedPlayers = Object.keys(playerCasts).sort((a, b) => {
+    const ra = roleOrder[ROLES[a]?.role] ?? 2;
+    const rb = roleOrder[ROLES[b]?.role] ?? 2;
+    return ra - rb;
+  });
 
-  let html = '';
-  for (const row of rows) {
-    const roleColor = roleColors[ROLES[row.player]?.role] || 'var(--accent-gold)';
-    html += `<div class="fflogs-timeline-row">
-      <div class="fflogs-timeline-row-label">${ROLES[row.player]?.label || row.player} ${row.ability}</div>
-      <div class="fflogs-timeline-track">`;
-    // Fight separators
-    for (const fs of fightStarts) {
-      const pct = (fs.time / maxTime) * 100;
-      html += `<div class="fflogs-timeline-separator" style="left:${pct}%"><span class="fflogs-timeline-sep-label">#${fs.id}</span></div>`;
-    }
-    // Cast markers
-    for (const ts of row.casts) {
-      const pct = (ts / maxTime) * 100;
-      if (pct < 0 || pct > 100) continue;
-      html += `<div class="fflogs-timeline-marker" style="left:${pct}%; background:${roleColor}" title="${row.ability} - ${ROLES[row.player]?.label} @ ${formatDuration(ts)}"></div>`;
+  html += `<div class="fflogs-timeline-wrapper" id="fflogsTimelineWrapper">
+    <div class="fflogs-timeline-canvas" style="width:${canvasWidth}px">`;
+
+  for (const player of sortedPlayers) {
+    const casts = playerCasts[player];
+    const role = ROLES[player]?.role || 'dps';
+    const roleColor = roleColors[role] || '#c9a44b';
+    const jobKey = state.memberJobs[player] || 'GNB';
+    const jobIcon = JOBS[jobKey]?.icon || '';
+
+    html += `<div class="fflogs-tl-row">
+      <div class="fflogs-tl-row-label"><img class="job-icon" src="${jobIcon}" alt="">${ROLES[player]?.label || player} ${state.memberNames[player] || ''}</div>
+      <div class="fflogs-tl-track">`;
+    for (const c of casts) {
+      const leftPx = c.timestamp * pxPerMs;
+      // Short name for common abilities
+      const shortName = MITIGATION_ABILITIES[c.abilityId] || c.ability || '';
+      html += `<div class="fflogs-tl-marker" style="left:${leftPx}px; background:${roleColor}; min-width:${Math.max(shortName.length * 6 + 6, 20)}px"
+        data-tooltip="${shortName} - ${ROLES[player]?.label} @ ${(c.timestamp/1000).toFixed(1)}s">${shortName}</div>`;
     }
     html += '</div></div>';
   }
 
   // Time axis
-  html += '<div class="fflogs-timeline-time-axis">';
-  const numLabels = 6;
-  for (let i = 0; i <= numLabels; i++) {
-    const pct = (i / numLabels) * 100;
-    const time = (i / numLabels) * maxTime;
-    html += `<span class="fflogs-timeline-time-label" style="left:${pct}%">${formatDuration(time)}</span>`;
+  html += `<div class="fflogs-tl-time-axis" style="width:${canvasWidth - 120}px">`;
+  const totalSec = fightDuration / 1000;
+  const tickInterval = totalSec <= 60 ? 10 : totalSec <= 180 ? 30 : 60;
+  for (let s = 0; s <= totalSec; s += tickInterval) {
+    const leftPx = s * 1000 * pxPerMs;
+    html += `<span class="fflogs-tl-tick" style="left:${leftPx}px">${s}s</span>`;
   }
-  html += '</div>';
+  html += '</div></div></div>';
 
   container.innerHTML = html;
 
-  // Add hover tooltip handler
-  container.querySelectorAll('.fflogs-timeline-marker').forEach(marker => {
+  // Drag-to-scroll
+  const wrapper = document.getElementById('fflogsTimelineWrapper');
+  if (wrapper) {
+    let isDragging = false, startX = 0, scrollStart = 0;
+    wrapper.addEventListener('mousedown', (e) => {
+      isDragging = true; startX = e.pageX; scrollStart = wrapper.scrollLeft;
+      e.preventDefault();
+    });
+    wrapper.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      wrapper.scrollLeft = scrollStart - (e.pageX - startX);
+    });
+    wrapper.addEventListener('mouseup', () => { isDragging = false; });
+    wrapper.addEventListener('mouseleave', () => { isDragging = false; });
+  }
+
+  // Tooltip on hover
+  container.querySelectorAll('.fflogs-tl-marker').forEach(marker => {
     marker.addEventListener('mouseenter', (e) => {
       const existing = document.querySelector('.fflogs-tooltip');
       if (existing) existing.remove();
       const tip = document.createElement('div');
       tip.className = 'fflogs-tooltip';
-      tip.textContent = marker.title;
+      tip.textContent = marker.dataset.tooltip;
       tip.style.left = e.clientX + 10 + 'px';
       tip.style.top = e.clientY - 20 + 'px';
       document.body.appendChild(tip);
