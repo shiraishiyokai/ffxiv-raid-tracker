@@ -1426,14 +1426,29 @@ function parseFFLogsUrl(url) {
 }
 
 async function fflogsGraphQL(query, variables) {
-  const resp = await fetch(FFLOGS_PROXY + '/graphql', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query, variables }),
-  });
-  if (!resp.ok) throw new Error(`FFLogs proxy error: ${resp.status}`);
+  console.log('[FFLogs] Requesting:', FFLOGS_PROXY + '/graphql', 'variables:', variables);
+  let resp;
+  try {
+    resp = await fetch(FFLOGS_PROXY + '/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, variables }),
+    });
+  } catch (fetchErr) {
+    console.error('[FFLogs] Fetch failed:', fetchErr);
+    throw new Error('网络请求失败: ' + fetchErr.message);
+  }
+  console.log('[FFLogs] Response status:', resp.status);
+  if (!resp.ok) {
+    const text = await resp.text();
+    console.error('[FFLogs] Error response:', text);
+    throw new Error(`FFLogs proxy error: ${resp.status}`);
+  }
   const data = await resp.json();
-  if (data.errors) throw new Error('FFLogs GraphQL error: ' + data.errors.map(e => e.message).join('; '));
+  if (data.errors) {
+    console.error('[FFLogs] GraphQL errors:', data.errors);
+    throw new Error('FFLogs GraphQL error: ' + data.errors.map(e => e.message).join('; '));
+  }
   return data.data;
 }
 
