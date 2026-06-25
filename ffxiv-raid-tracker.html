@@ -657,6 +657,8 @@ body.member-mode .captain-only { display: none !important; }
   transition: transform 0.1s; min-width: 4px;
 }
 .fflogs-tl-marker:hover { transform: translateX(-50%) scale(1.2); z-index: 5; filter: brightness(1.3); }
+.fflogs-tl-marker .ability-icon { width: 18px; height: 18px; vertical-align: middle; border-radius: 2px; pointer-events: none; image-rendering: pixelated; }
+.fflogs-tl-marker .ability-fallback { font-size: 0.6rem; white-space: nowrap; }
 
 .fflogs-tl-time-axis { position: relative; height: 22px; border-top: 1px solid var(--border-color); display: flex; margin-left: 120px; }
 .fflogs-tl-tick { position: absolute; font-size: 0.65rem; color: var(--text-muted); top: 4px; transform: translateX(-50%); }
@@ -1402,42 +1404,80 @@ const FFLOGS_JOB_MAP = {
   'Bard': 'BRD', 'Dancer': 'DNC', 'Reaper': 'RPR', 'Viper': 'VPR', 'Pictomancer': 'PCT',
 };
 
-// Tracked abilities (user will provide detailed list later)
-// All FFXIV mitigation ability IDs (gameID) — used to filter cast events locally
+// All FFXIV mitigation abilities — game IDs verified via Garland Tools/XivAPI
+// Format: { gameID: { name: '中文名', icon: 'local_png_path' } }
+// icon path references local files in the icons/ directory
 const MITIGATION_ABILITIES = {
   // Shared role
-  7535: 'Rampart', 7531: "Arm's Length", 7537: 'Reprisal', 7533: 'Feint', 7559: 'Addle', 7542: 'Mantra',
+  7531: { name: '铁壁', icon: 'icons/7531.png' },         // Rampart
+  7548: { name: '亲疏自如', icon: 'icons/7548.png' },      // Arm's Length
+  7535: { name: '溃逃', icon: 'icons/7535.png' },         // Reprisal
+  7549: { name: '牵制', icon: 'icons/7549.png' },         // Feint
+  65:   { name: '真言', icon: 'icons/65.png' },           // Mantra
+  7560: { name: '衰退', icon: 'icons/7560.png' },         // Addle
   // Paladin
-  3540: 'Sheltron', 7382: 'Divine Veil', 7384: 'Intervention', 7385: 'Passage of Arms',
-  16459: 'Holy Sheltron', 25746: 'Bulwark',
+  3542: { name: '盾阵', icon: 'icons/3542.png' },         // Sheltron
+  25746: { name: '神圣盾阵', icon: 'icons/25746.png' },    // Holy Sheltron
+  3540: { name: '圣光幕帘', icon: 'icons/3540.png' },      // Divine Veil
+  7382: { name: '干预', icon: 'icons/7382.png' },         // Intervention
+  7385: { name: '武装戍卫', icon: 'icons/7385.png' },      // Passage of Arms
+  22:   { name: '壁垒', icon: 'icons/22.png' },           // Bulwark
   // Warrior
-  3569: 'Thrill of Battle', 3570: 'Holmgang', 3571: 'Vengeance',
-  7430: 'Raw Intuition', 7432: 'Equilibrium', 7433: 'Shake It Off',
-  7434: 'Nascent Flash', 16137: 'Bloodwhetting', 25748: 'Damnation',
+  40:   { name: '战栗', icon: 'icons/40.png' },           // Thrill of Battle
+  43:   { name: '死斗', icon: 'icons/43.png' },           // Holmgang
+  44:   { name: '复仇', icon: 'icons/44.png' },           // Vengeance
+  3551: { name: '原始直觉', icon: 'icons/3551.png' },      // Raw Intuition
+  3552: { name: '均衡', icon: 'icons/3552.png' },         // Equilibrium
+  7388: { name: '挥弃', icon: 'icons/7388.png' },         // Shake It Off
+  16464: { name: '新生之息', icon: 'icons/16464.png' },    // Nascent Flash
+  25751: { name: '血戮', icon: 'icons/25751.png' },       // Bloodwhetting
   // Dark Knight
-  3583: 'Shadow Wall', 3585: 'Living Dead', 3587: 'Dark Mind',
-  7436: 'The Blackest Night', 16460: 'Oblation', 25750: 'Shadowed Vigor',
+  3636: { name: '影墙', icon: 'icons/3636.png' },         // Shadow Wall
+  3638: { name: '行尸走肉', icon: 'icons/3638.png' },      // Living Dead
+  3634: { name: '暗黑心眼', icon: 'icons/3634.png' },      // Dark Mind
+  7393: { name: '至黑之夜', icon: 'icons/7393.png' },      // The Blackest Night
+  25754: { name: '献祭', icon: 'icons/25754.png' },       // Oblation
   // Gunbreaker
-  7541: 'Camouflage', 7546: 'Nebula', 7549: 'Superbolide',
-  7560: 'Heart of Light', 7561: 'Aurora', 7562: 'Heart of Stone',
-  16138: 'Heart of Corundum', 25758: 'Trajectory',
+  16140: { name: '伪装', icon: 'icons/16140.png' },       // Camouflage
+  16148: { name: '星云', icon: 'icons/16148.png' },       // Nebula
+  16152: { name: '超火', icon: 'icons/16152.png' },       // Superbolide
+  16160: { name: '光之心', icon: 'icons/16160.png' },      // Heart of Light
+  16151: { name: '极光', icon: 'icons/16151.png' },       // Aurora
+  16161: { name: '石之心', icon: 'icons/16161.png' },      // Heart of Stone
+  25758: { name: '刚玉之心', icon: 'icons/25758.png' },    // Heart of Corundum
   // White Mage
-  136: 'Divine Benison', 16528: 'Aquaveil', 16531: 'Liturgy of the Bell',
-  16534: 'Temperance', 16542: 'Plenary Indulgence',
+  7432: { name: '神祝祷', icon: 'icons/7432.png' },       // Divine Benison
+  25861: { name: '水流幕', icon: 'icons/25861.png' },      // Aquaveil
+  25862: { name: '祝祷之钟', icon: 'icons/25862.png' },    // Liturgy of the Bell
+  16536: { name: '节制', icon: 'icons/16536.png' },       // Temperance
+  7433: { name: '大赦', icon: 'icons/7433.png' },         // Plenary Indulgence
   // Scholar
-  188: 'Sacred Soil', 7435: 'Excogitation', 16535: 'Expedient',
-  16537: 'Protraction', 16540: 'Recitation',
-  25781: 'Kerachole', 25782: 'Panhaima',
+  188:   { name: '野战治疗阵', icon: 'icons/188.png' },     // Sacred Soil
+  7434: { name: '应急战术', icon: 'icons/7434.png' },      // Excogitation
+  25868: { name: '疾风怒涛之计', icon: 'icons/25868.png' }, // Expedient
+  25867: { name: '延展', icon: 'icons/25867.png' },       // Protraction
+  16542: { name: '复述', icon: 'icons/16542.png' },       // Recitation
   // Astrologian
-  4401: 'Collective Unconscious', 16543: 'Neutral Sect',
-  16545: 'Macrocosmos', 16546: 'Synastry', 25789: 'Divination',
+  3613:  { name: '集体潜意识', icon: 'icons/3613.png' },    // Collective Unconscious
+  16559: { name: '中立学派', icon: 'icons/16559.png' },    // Neutral Sect
+  25874: { name: '宏观宇宙', icon: 'icons/25874.png' },    // Macrocosmos
+  3612:  { name: '星位合图', icon: 'icons/3612.png' },     // Synastry
+  16552: { name: '占卜', icon: 'icons/16552.png' },       // Divination
   // Sage
-  24373: 'Kerachole', 24374: 'Panhaima', 24375: 'Haima',
-  24378: 'Holos', 24382: 'Pepsis', 24383: 'Zoe',
-  24385: 'Krasis', 24386: 'Soteria', 24387: 'Druochole',
-  24388: 'Ixochole', 24390: 'Taurochole', 24391: 'Physis',
-  24393: 'Eukrasian Diagnosis', 24395: 'Eukrasian Prognosis',
-  25855: 'Philosophia',
+  24298: { name: '克拉克尔', icon: 'icons/24298.png' },    // Kerachole
+  24311: { name: '万灵阵', icon: 'icons/24311.png' },      // Panhaima
+  24305: { name: '灵蚀', icon: 'icons/24305.png' },       // Haima
+  24310: { name: '全灵', icon: 'icons/24310.png' },       // Holos
+  24301: { name: '发酵', icon: 'icons/24301.png' },       // Pepsis
+  24300: { name: '佐埃', icon: 'icons/24300.png' },       // Zoe
+  24317: { name: '克拉斯', icon: 'icons/24317.png' },      // Krasis
+  24294: { name: '索特利亚', icon: 'icons/24294.png' },    // Soteria
+  24296: { name: '德鲁阿克勒', icon: 'icons/24296.png' },  // Druochole
+  24299: { name: '伊克索克勒', icon: 'icons/24299.png' },  // Ixochole
+  24303: { name: '陶罗克勒', icon: 'icons/24303.png' },    // Taurochole
+  24288: { name: '菲西斯', icon: 'icons/24288.png' },      // Physis
+  24291: { name: '异论诊断', icon: 'icons/24291.png' },    // Eukrasian Diagnosis
+  24292: { name: '异论预言', icon: 'icons/24292.png' },    // Eukrasian Prognosis
 };
 
 // GraphQL query templates
@@ -1511,31 +1551,34 @@ async function fetchFights(code) {
 
 async function fetchAllDeaths(code, fightIDs) {
   const allDeaths = [];
-  let nextStart = null;
-  const vars = { code, fightIDs };
-  if (nextStart) vars.startTime = nextStart;
-  while (true) {
-    if (nextStart) vars.startTime = nextStart;
-    const data = await fflogsGraphQL(QL_DEATHS, vars);
-    const events = data.reportData.report.events;
-    if (events.data) allDeaths.push(...(Array.isArray(events.data) ? events.data : JSON.parse(events.data)));
-    if (!events.nextPageTimestamp) break;
-    nextStart = events.nextPageTimestamp;
+  for (const fightId of fightIDs) {
+    let nextStart = null;
+    while (true) {
+      const vars = { code, fightIDs: [fightId] };
+      if (nextStart) vars.startTime = nextStart;
+      const data = await fflogsGraphQL(QL_DEATHS, vars);
+      const events = data.reportData.report.events;
+      if (events.data) allDeaths.push(...(Array.isArray(events.data) ? events.data : JSON.parse(events.data)));
+      if (!events.nextPageTimestamp) break;
+      nextStart = events.nextPageTimestamp;
+    }
   }
   return allDeaths;
 }
 
 async function fetchAllCasts(code, fightIDs) {
   const allCasts = [];
-  let nextStart = null;
-  const vars = { code, fightIDs };
-  while (true) {
-    if (nextStart) vars.startTime = nextStart;
-    const data = await fflogsGraphQL(QL_CASTS, vars);
-    const events = data.reportData.report.events;
-    if (events.data) allCasts.push(...(Array.isArray(events.data) ? events.data : JSON.parse(events.data)));
-    if (!events.nextPageTimestamp) break;
-    nextStart = events.nextPageTimestamp;
+  for (const fightId of fightIDs) {
+    let nextStart = null;
+    while (true) {
+      const vars = { code, fightIDs: [fightId] };
+      if (nextStart) vars.startTime = nextStart;
+      const data = await fflogsGraphQL(QL_CASTS, vars);
+      const events = data.reportData.report.events;
+      if (events.data) allCasts.push(...(Array.isArray(events.data) ? events.data : JSON.parse(events.data)));
+      if (!events.nextPageTimestamp) break;
+      nextStart = events.nextPageTimestamp;
+    }
   }
   return allCasts;
 }
@@ -1646,7 +1689,8 @@ function buildAbilityTimeline(castEvents, actorMapping, fights) {
   const timeline = [];
   for (const event of castEvents) {
     const pos = actorMapping[event.sourceID];
-    const fight = fightMap[event.fight];
+    const fid = event.fightID ?? event.fight;  // handle both API field name variants
+    const fight = fightMap[fid];
     if (pos && fight) {
       // timestamp relative to fight start (events use report-absolute timestamps)
       const relTs = event.timestamp - fight.startTime;
@@ -1654,8 +1698,9 @@ function buildAbilityTimeline(castEvents, actorMapping, fights) {
         player: pos,
         ability: event.ability?.name || 'Unknown',
         abilityId: event.ability?.gameID || 0,
+        icon: event.ability?.icon || null,
         timestamp: relTs,
-        fightId: event.fight,
+        fightId: fid,
       });
     }
   }
@@ -1888,9 +1933,14 @@ async function finishMappingAndFetch(statusEl) {
     const mitigationCasts = allCasts.filter(c =>
       mitiIds.has(c.abilityGameID) && mappedActorIds.has(c.sourceID)
     );
-    // Enrich with ability name
+    // Enrich with ability info (Chinese name + local icon path)
     for (const c of mitigationCasts) {
-      c.ability = { name: MITIGATION_ABILITIES[c.abilityGameID] || 'Unknown', gameID: c.abilityGameID };
+      const info = MITIGATION_ABILITIES[c.abilityGameID];
+      c.ability = {
+        name: info?.name || 'Unknown',
+        gameID: c.abilityGameID,
+        icon: info?.icon || null,
+      };
     }
     fflogsImportState.castEvents = mitigationCasts;
 
@@ -2072,10 +2122,19 @@ function renderAbilityTimeline(fl) {
       <div class="fflogs-tl-track">`;
     for (const c of casts) {
       const leftPx = c.timestamp * pxPerMs;
-      // Short name for common abilities
-      const shortName = MITIGATION_ABILITIES[c.abilityId] || c.ability || '';
-      html += `<div class="fflogs-tl-marker" style="left:${leftPx}px; background:${roleColor}; min-width:${Math.max(shortName.length * 6 + 6, 20)}px"
-        data-tooltip="${shortName} - ${ROLES[player]?.label} @ ${(c.timestamp/1000).toFixed(1)}s">${shortName}</div>`;
+      const info = MITIGATION_ABILITIES[c.abilityId];
+      const cnName = info?.name || c.ability || '';
+      const iconPath = info?.icon || c.icon || null;
+      let markerContent;
+      if (iconPath) {
+        markerContent = `<img class="ability-icon" src="${iconPath}" alt="${cnName}" onerror="this.style.display='none';this.nextElementSibling.style.display=''">` +
+          `<span class="ability-fallback" style="display:none">${cnName}</span>`;
+      } else {
+        markerContent = cnName;
+      }
+      const minW = iconPath ? 24 : Math.max(cnName.length * 6 + 6, 20);
+      html += `<div class="fflogs-tl-marker" style="left:${leftPx}px; background:${roleColor}; min-width:${minW}px"
+        data-tooltip="${cnName} - ${ROLES[player]?.label} @ ${(c.timestamp/1000).toFixed(1)}s">${markerContent}</div>`;
     }
     html += '</div></div>';
   }
