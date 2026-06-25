@@ -654,7 +654,7 @@ body.member-mode .captain-only { display: none !important; }
 }
 
 .fflogs-fight-list { margin-top: var(--space-sm); }
-.fflogs-fight-row { display: grid; grid-template-columns: 30px 1fr 50px 70px 60px; gap: var(--space-sm); padding: var(--space-xs) 0; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); }
+.fflogs-fight-row { display: grid; grid-template-columns: 30px 50px 50px 50px 70px 60px; gap: var(--space-sm); padding: var(--space-xs) 0; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); }
 .fflogs-fight-row.header { color: var(--text-muted); font-weight: 600; }
 .fflogs-fight-kill { color: var(--accent-green); }
 .fflogs-fight-wipe { color: var(--accent-red); }
@@ -1395,6 +1395,7 @@ const QL_FIGHTS = `
 query($code: String!) {
   reportData {
     report(code: $code) {
+      startTime
       fights { id name kill startTime endTime bossPercentage fightPercentage lastPhase lastPhaseIsIntermission difficulty encounterID friendlyPlayers }
       masterData { actors { id name server subType type } }
     }
@@ -1455,7 +1456,7 @@ async function fflogsGraphQL(query, variables) {
 async function fetchFights(code) {
   const data = await fflogsGraphQL(QL_FIGHTS, { code });
   const report = data.reportData.report;
-  return { fights: report.fights, actors: report.masterData.actors };
+  return { fights: report.fights, actors: report.masterData.actors, reportStartTime: report.startTime };
 }
 
 async function fetchAllDeaths(code, fightIDs) {
@@ -1648,6 +1649,7 @@ async function startFFLogsImport() {
     const data = await fetchFights(parsed.code);
     fflogsImportState.fights = data.fights;
     fflogsImportState.actors = data.actors;
+    fflogsImportState.reportStartTime = data.reportStartTime;
 
     // If single fight URL, auto-select that encounter
     if (parsed.fightId) {
@@ -1850,6 +1852,7 @@ async function finishMappingAndFetch(statusEl) {
       fightId: fflogsImportState.fightId,
       url: document.getElementById('fflogsUrlInput').value.trim(),
       importedAt: Date.now(),
+      reportStartTime: fflogsImportState.reportStartTime,
       bossName: fflogsImportState.analysis.bossName,
       furthestPhase: fflogsImportState.analysis.furthestPhase,
       totalFights: fflogsImportState.analysis.totalFights,
@@ -1860,6 +1863,7 @@ async function finishMappingAndFetch(statusEl) {
       abilityTimeline: timeline,
       fights: fflogsImportState.analysis.fights.map(f => ({
         id: f.id, kill: f.kill, duration: f.endTime - f.startTime,
+        startTime: f.startTime, bossPercentage: f.bossPercentage,
         fightPercentage: f.fightPercentage, lastPhase: f.lastPhase,
         lastPhaseIsIntermission: f.lastPhaseIsIntermission,
       })),
@@ -2030,13 +2034,16 @@ function renderAbilityTimeline(fl) {
 
 function renderFightList(fl) {
   const content = document.getElementById('fflogsFightListContent');
-  let html = '<div class="fflogs-fight-row header"><span>#</span><span>结果</span><span>时长</span><span>进度</span><span>阶段</span></div>';
+  let html = '<div class="fflogs-fight-row header"><span>#</span><span>时间</span><span>结果</span><span>时长</span><span>进度</span><span>阶段</span></div>';
   for (const f of fl.fights) {
     const result = f.kill ? '<span class="fflogs-fight-kill">Clear</span>' : '<span class="fflogs-fight-wipe">Wipe</span>';
     const pct = f.kill ? '0%' : `${(f.bossPercentage || 0).toFixed(1)}%`;
     const phase = f.lastPhaseIsIntermission ? `P${f.lastPhase}过渡` : `P${f.lastPhase}`;
+    // Earth time: reportStartTime + fight.startTime gives epoch ms
+    const epochMs = (fl.reportStartTime || 0) + (f.startTime || 0);
+    const timeStr = epochMs > 0 ? new Date(epochMs).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '-';
     html += `<div class="fflogs-fight-row">
-      <span>${f.id}</span>${result}<span>${formatDuration(f.duration)}</span><span>${pct}</span><span>${phase}</span>
+      <span>${f.id}</span><span>${timeStr}</span>${result}<span>${formatDuration(f.duration)}</span><span>${pct}</span><span>${phase}</span>
     </div>`;
   }
   content.innerHTML = html;
