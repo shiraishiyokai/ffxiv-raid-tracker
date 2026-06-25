@@ -1517,7 +1517,7 @@ function analyzeFights(fights, selectedEncounterID) {
   let furthestPhase;
   if (hasKill) furthestPhase = 'Clear';
   else {
-    const phaseNum = bestPhase + 1; // lastPhase is 0-indexed
+    const phaseNum = bestPhase; // lastPhase is 1-indexed (1=P1, 2=P2, 3=P3)
     if (bestFight.lastPhaseIsIntermission) furthestPhase = `P${phaseNum} 过渡`;
     else furthestPhase = `P${phaseNum}`;
     furthestPhase += ` ${bestBossPct.toFixed(1)}%`;
@@ -2033,8 +2033,8 @@ function renderFightList(fl) {
   let html = '<div class="fflogs-fight-row header"><span>#</span><span>结果</span><span>时长</span><span>进度</span><span>阶段</span></div>';
   for (const f of fl.fights) {
     const result = f.kill ? '<span class="fflogs-fight-kill">Clear</span>' : '<span class="fflogs-fight-wipe">Wipe</span>';
-    const pct = f.kill ? '100%' : `${(100 - (f.fightPercentage || 0)).toFixed(1)}%`;
-    const phase = f.lastPhaseIsIntermission ? `P${f.lastPhase+1}过渡` : `P${f.lastPhase+1}`;
+    const pct = f.kill ? '0%' : `${(f.bossPercentage || 0).toFixed(1)}%`;
+    const phase = f.lastPhaseIsIntermission ? `P${f.lastPhase}过渡` : `P${f.lastPhase}`;
     html += `<div class="fflogs-fight-row">
       <span>${f.id}</span>${result}<span>${formatDuration(f.duration)}</span><span>${pct}</span><span>${phase}</span>
     </div>`;
