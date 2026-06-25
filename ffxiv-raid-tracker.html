@@ -641,7 +641,7 @@ body.member-mode .captain-only { display: none !important; }
   background: var(--bg-input); cursor: grab; user-select: none;
 }
 .fflogs-timeline-wrapper:active { cursor: grabbing; }
-.fflogs-timeline-canvas { position: relative; min-width: 100%; padding-top: 18px; }
+.fflogs-timeline-canvas { position: relative; min-width: 100%; }
 
 .fflogs-tl-row { position: relative; height: 26px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; }
 .fflogs-tl-row:nth-child(odd) { background: rgba(255,255,255,0.02); }
@@ -664,16 +664,16 @@ body.member-mode .captain-only { display: none !important; }
 .fflogs-tl-marker .ability-icon { width: 18px; height: 18px; vertical-align: middle; border-radius: 2px; pointer-events: none; image-rendering: pixelated; }
 .fflogs-tl-marker .ability-fallback { font-size: 0.6rem; white-space: nowrap; }
 
+.fflogs-tl-phase-header { position: relative; height: 18px; overflow: hidden; }
+.fflogs-tl-phase-header-label {
+  position: absolute; top: 2px; transform: translateX(-50%);
+  font-size: 0.7rem; color: #ffc832; white-space: nowrap; font-weight: 600;
+}
+.fflogs-tl-phase-header-label small { font-weight: 400; color: rgba(255, 200, 50, 0.7); font-size: 0.6rem; }
 .fflogs-tl-phase-line {
-  position: absolute; top: 0; width: 1px;
+  position: absolute; top: 18px; width: 1px;
   background: rgba(255, 200, 50, 0.45); z-index: 3; pointer-events: none;
 }
-.fflogs-tl-phase-label {
-  position: absolute; top: -16px; left: 3px;
-  font-size: 0.7rem; color: #ffc832; white-space: nowrap;
-  font-weight: 600;
-}
-.fflogs-tl-phase-label small { font-weight: 400; color: rgba(255, 200, 50, 0.7); font-size: 0.6rem; }
 
 .fflogs-tl-time-axis { position: relative; height: 22px; border-top: 1px solid var(--border-color); display: flex; margin-left: 120px; }
 .fflogs-tl-tick { position: absolute; font-size: 0.65rem; color: var(--text-muted); top: 4px; transform: translateX(-50%); }
@@ -1536,7 +1536,7 @@ query($code: String!, $fightIDs: [Int!]) {
     report(code: $code) {
       fights(fightIDs: $fightIDs) {
         id
-        phaseTransitions { startTime phase }
+        phaseTransitions { id startTime }
       }
     }
   }
@@ -1622,8 +1622,12 @@ async function fetchPhaseTransitions(code, fightIDs) {
     const result = {};
     for (const f of fightsData) {
       if (f.phaseTransitions && f.phaseTransitions.length > 0) {
-        result[f.id] = f.phaseTransitions.map(pt => ({
-          phase: pt.phase,
+        // Sort by startTime to ensure correct order
+        const sorted = [...f.phaseTransitions].sort((a, b) => a.startTime - b.startTime);
+        // PhaseTransition.id is a unique identifier, not the phase number.
+        // Infer phase number from order: 1st transition = P2 boundary, 2nd = P3, etc.
+        result[f.id] = sorted.map((pt, idx) => ({
+          phase: idx + 2, // P1→P2 = phase 2, P2→P3 = phase 3, etc.
           startTime: pt.startTime,
         }));
       }
@@ -1688,33 +1692,64 @@ function autoMapPlayers(actors, memberNames, playerMappingCache, memberJobs, fig
   const unmapped = [];
   const usedPositions = new Set();
 
-  // Try auto-match from cache and memberNames
+  // Step 1: Match from cache (by player name)
   for (const p of players) {
-    let matched = false;
-    // 1. Check playerMappingCache
     if (playerMappingCache[p.name] && !usedPositions.has(playerMappingCache[p.name])) {
       mapping[p.name] = playerMappingCache[p.name];
       usedPositions.add(playerMappingCache[p.name]);
-      matched = true;
     }
-    // 2. Check memberNames exact match
-    if (!matched) {
-      for (const [pos, name] of Object.entries(memberNames)) {
-        if (name === p.name && !usedPositions.has(pos)) {
-          mapping[p.name] = pos;
-          usedPositions.add(pos);
-          matched = true;
-          break;
-        }
+  }
+
+  // Step 2: Match by exact player name from memberNames
+  for (const p of players) {
+    if (mapping[p.name]) continue; // already mapped
+    for (const [pos, name] of Object.entries(memberNames)) {
+      if (!name || usedPositions.has(pos)) continue;
+      if (name === p.name) {
+        mapping[p.name] = pos;
+        usedPositions.add(pos);
+        break;
       }
     }
-    if (!matched) unmapped.push(p);
+  }
+
+  // Step 3: Auto-match by job — FFLogs player job matches a position's job in memberJobs
+  for (const p of players) {
+    if (mapping[p.name]) continue; // already mapped
+    const fflogsJobKey = FFLOGS_JOB_MAP[p.subType] || null;
+    if (!fflogsJobKey) continue;
+    // Find the first unused position whose job matches this player's job
+    for (const [pos, job] of Object.entries(memberJobs)) {
+      if (usedPositions.has(pos)) continue;
+      if (job === fflogsJobKey) {
+        mapping[p.name] = pos;
+        usedPositions.add(pos);
+        break;
+      }
+    }
+  }
+
+  // Remaining unmatched players
+  for (const p of players) {
+    if (!mapping[p.name]) unmapped.push(p);
   }
 
   return { mapping, unmapped, usedPositions, players };
 }
 
 function suggestPositionForPlayer(player, usedPositions) {
+  // 1. Try matching by job first
+  const fflogsJobKey = FFLOGS_JOB_MAP[player.subType] || null;
+  if (fflogsJobKey) {
+    const day = getActiveDay();
+    const memberJobs = day ? state.memberJobs : null;
+    if (memberJobs) {
+      for (const [pos, job] of Object.entries(memberJobs)) {
+        if (!usedPositions.has(pos) && job === fflogsJobKey) return pos;
+      }
+    }
+  }
+  // 2. Fallback: suggest by role
   const role = FFLOGS_ROLE_MAP[player.subType] || 'dps';
   const rolePositions = Object.entries(ROLES).filter(([k, v]) => v.role === role).map(([k]) => k);
   for (const pos of rolePositions) {
@@ -2180,6 +2215,21 @@ function renderAbilityTimeline(fl) {
   html += `<div class="fflogs-timeline-wrapper" id="fflogsTimelineWrapper">
     <div class="fflogs-timeline-canvas" style="width:${canvasWidth}px">`;
 
+  // Phase header row: labels at the top showing P transition points
+  const phaseData = fl.phaseTransitions?.[fflogsTimelineFightId];
+  html += `<div class="fflogs-tl-phase-header" style="margin-left:120px">`;
+  if (phaseData && phaseData.length > 0) {
+    for (const pt of phaseData) {
+      const relTs = pt.startTime - (currentFight?.startTime || 0);
+      if (relTs < 0 || relTs > fightDuration) continue;
+      const leftPx = relTs * pxPerMs;
+      const phaseLabel = `P${pt.phase}`;
+      const timeLabel = `${(relTs / 1000).toFixed(1)}s`;
+      html += `<div class="fflogs-tl-phase-header-label" style="left:${leftPx}px">${phaseLabel} <small>${timeLabel}</small></div>`;
+    }
+  }
+  html += '</div>';
+
   for (const player of sortedPlayers) {
     const casts = playerCasts[player];
     const role = ROLES[player]?.role || 'dps';
@@ -2209,8 +2259,7 @@ function renderAbilityTimeline(fl) {
     html += '</div></div>';
   }
 
-  // Phase divider lines
-  const phaseData = fl.phaseTransitions?.[fflogsTimelineFightId];
+  // Phase divider lines (vertical lines spanning all player rows)
   if (phaseData && phaseData.length > 0) {
     const rowHeight = 26;
     const totalRows = sortedPlayers.length;
@@ -2218,11 +2267,7 @@ function renderAbilityTimeline(fl) {
       const relTs = pt.startTime - (currentFight?.startTime || 0);
       if (relTs < 0 || relTs > fightDuration) continue;
       const leftPx = relTs * pxPerMs + 120; // offset for row label width
-      const phaseLabel = `P${pt.phase}`;
-      const timeLabel = `${(relTs / 1000).toFixed(1)}s`;
-      html += `<div class="fflogs-tl-phase-line" style="left:${leftPx}px; height:${totalRows * rowHeight}px">
-        <span class="fflogs-tl-phase-label">${phaseLabel} <small>${timeLabel}</small></span>
-      </div>`;
+      html += `<div class="fflogs-tl-phase-line" style="left:${leftPx}px; height:${totalRows * rowHeight}px"></div>`;
     }
   }
 
