@@ -1395,7 +1395,7 @@ const QL_FIGHTS = `
 query($code: String!) {
   reportData {
     report(code: $code) {
-      fights { id name kill startTime endTime bossPercentage fightPercentage lastPhase lastPhaseIsIntermission difficulty encounterID }
+      fights { id name kill startTime endTime bossPercentage fightPercentage lastPhase lastPhaseIsIntermission difficulty encounterID friendlyPlayers }
       masterData { actors { id name server subType type } }
     }
   }
@@ -1526,8 +1526,18 @@ function analyzeFights(fights, selectedEncounterID) {
   return { bossName, totalFights, totalTime, furthestPhase, bestPhase, bestBossPct, hasKill, fights: filtered };
 }
 
-function autoMapPlayers(actors, memberNames, playerMappingCache, memberJobs) {
-  const players = actors.filter(a => a.type === 'Player');
+function autoMapPlayers(actors, memberNames, playerMappingCache, memberJobs, fightPlayerIds) {
+  // Filter: only real players with a valid job, and only those in the selected fights
+  const INVALID_SUBTYPES = ['LimitBreak', 'Unknown', 'Pet', 'NPC', 'Boss'];
+  let players = actors.filter(a =>
+    a.type === 'Player' && !INVALID_SUBTYPES.includes(a.subType)
+  );
+  // If we know which player IDs participated in the selected fights, filter further
+  if (fightPlayerIds && fightPlayerIds.length > 0) {
+    const idSet = new Set(fightPlayerIds);
+    players = players.filter(p => idSet.has(p.id));
+  }
+
   const mapping = {};
   const unmapped = [];
   const usedPositions = new Set();
@@ -1718,8 +1728,21 @@ async function proceedAfterBossSelect() {
   fflogsImportState.analysis = analysis;
 
   // Step 2: Auto-map players
+  // Collect all friendly player IDs from the selected boss fights
+  const fightPlayerIds = [];
+  for (const f of analysis.fights) {
+    if (f.friendlyPlayers) fightPlayerIds.push(...f.friendlyPlayers);
+  }
+  // Deduplicate
+  const uniqueFightPlayerIds = [...new Set(fightPlayerIds)];
+  // Remove LimitBreak IDs (id 12 or similar - check subType)
+  const realPlayerIds = uniqueFightPlayerIds.filter(id => {
+    const actor = fflogsImportState.actors.find(a => a.id === id);
+    return actor && actor.type === 'Player' && !['LimitBreak','Unknown','Pet','NPC','Boss'].includes(actor.subType);
+  });
+
   const { mapping, unmapped, usedPositions, players } = autoMapPlayers(
-    fflogsImportState.actors, state.memberNames, state.playerMappingCache, state.memberJobs
+    fflogsImportState.actors, state.memberNames, state.playerMappingCache, state.memberJobs, realPlayerIds
   );
   fflogsImportState.playerMapping = mapping;
 
