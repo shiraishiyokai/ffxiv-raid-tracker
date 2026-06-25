@@ -1,0 +1,8 @@
+name = "fflogs-proxy"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Deploy: wrangler deploy
+# Set secrets:
+#   wrangler secret put FFLOGS_CLIENT_ID
+#   wrangler secret put FFLOGS_CLIENT_SECRET

@@ -1,1 +1,7 @@
 .DS_Store
+node_modules/
+.netlify/
+fflogs-proxy/node_modules/
+fflogs-proxy/.wrangler/
+fflogs-proxy-vercel/
+midscene_run/

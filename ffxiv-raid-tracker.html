@@ -578,6 +578,100 @@ body.member-mode .captain-only { display: none !important; }
 .cal-day.active.has-record::after { background: var(--bg-primary); }
 .cal-day.has-record { color: var(--text-primary); font-weight: 600; }
 .cal-note { font-size: 0.7rem; color: var(--text-muted); margin-top: var(--space-sm); text-align: center; }
+
+/* ============================================================
+   FFLogs Section
+   ============================================================ */
+#fflogsSection { display: flex; flex-direction: column; gap: var(--space-md); }
+.fflogs-url-row { display: flex; gap: var(--space-sm); align-items: center; }
+.fflogs-url-input { flex: 1; min-width: 0; }
+.fflogs-import-btn { white-space: nowrap; }
+.fflogs-status { font-size: 0.85rem; color: var(--text-muted); padding: var(--space-sm) 0; }
+.fflogs-status.loading { color: var(--accent-blue); }
+.fflogs-status.error { color: var(--accent-red); }
+.fflogs-status.success { color: var(--accent-green); }
+
+.fflogs-summary-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm); margin-bottom: var(--space-md);
+}
+.fflogs-stat { background: var(--bg-input); border-radius: var(--border-radius-sm); padding: var(--space-sm) var(--space-md); text-align: center; }
+.fflogs-stat-label { font-size: 0.75rem; color: var(--text-muted); display: block; }
+.fflogs-stat-value { font-size: 1.1rem; font-weight: 600; color: var(--accent-gold); display: block; }
+
+.fflogs-death-table {
+  display: grid; grid-template-columns: repeat(8, 1fr);
+  gap: var(--space-sm); margin-bottom: var(--space-md);
+}
+.fflogs-death-cell { background: var(--bg-input); border-radius: var(--border-radius-sm); padding: var(--space-sm); text-align: center; }
+.fflogs-death-cell .pos-label { font-size: 0.75rem; color: var(--text-muted); }
+.fflogs-death-cell .death-count { font-size: 1.1rem; font-weight: 600; }
+.fflogs-death-cell .death-count.zero { color: var(--accent-green); }
+.fflogs-death-cell .death-count.low { color: var(--text-primary); }
+.fflogs-death-cell .death-count.high { color: var(--accent-orange); }
+.fflogs-death-cell .death-count.very-high { color: var(--accent-red); }
+
+.fflogs-mapping-panel { background: var(--bg-input); border-radius: var(--border-radius); padding: var(--space-md); margin-top: var(--space-md); }
+.fflogs-mapping-rows { display: flex; flex-direction: column; gap: var(--space-sm); }
+.fflogs-mapping-row { display: flex; align-items: center; gap: var(--space-sm); }
+.fflogs-mapping-row .player-name { font-weight: 600; min-width: 80px; }
+.fflogs-mapping-row .player-job { color: var(--text-muted); font-size: 0.85rem; min-width: 60px; }
+.fflogs-mapping-row select { width: 80px; }
+.fflogs-mapping-row.conflict { background: rgba(231,76,60,0.15); border-radius: var(--border-radius-sm); padding: var(--space-xs); }
+.fflogs-mapping-actions { display: flex; gap: var(--space-sm); justify-content: flex-end; margin-top: var(--space-md); }
+
+.fflogs-boss-select-panel { background: var(--bg-input); border-radius: var(--border-radius); padding: var(--space-md); margin-top: var(--space-md); }
+.fflogs-boss-list { display: flex; flex-direction: column; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.fflogs-boss-item { display: flex; align-items: center; gap: var(--space-sm); cursor: pointer; padding: var(--space-sm); border-radius: var(--border-radius-sm); background: var(--bg-card); transition: background var(--transition-fast); }
+.fflogs-boss-item:hover { background: var(--bg-card-hover); }
+.fflogs-boss-item.selected { background: var(--accent-gold); color: var(--bg-primary); }
+.fflogs-boss-name { font-weight: 600; }
+.fflogs-boss-count { color: var(--text-muted); font-size: 0.85rem; }
+
+.fflogs-timeline { position: relative; margin-top: var(--space-md); }
+.fflogs-timeline-row { position: relative; height: 24px; border-bottom: 1px solid var(--border-color); }
+.fflogs-timeline-row-label { position: absolute; left: 0; top: 2px; font-size: 0.75rem; color: var(--text-muted); width: 80px; white-space: nowrap; overflow: hidden; }
+.fflogs-timeline-track { position: absolute; left: 85px; right: 0; top: 0; height: 24px; }
+.fflogs-timeline-marker {
+  position: absolute; width: 8px; height: 8px; border-radius: 50%;
+  top: 8px; transform: translateX(-50%); cursor: pointer; z-index: 2;
+  transition: transform var(--transition-fast);
+}
+.fflogs-timeline-marker:hover { transform: translateX(-50%) scale(1.8); z-index: 3; }
+.fflogs-timeline-separator {
+  position: absolute; width: 1px; height: 24px; top: 0;
+  background: var(--border-color); z-index: 1;
+}
+.fflogs-timeline-sep-label { position: absolute; top: -14px; font-size: 0.65rem; color: var(--text-muted); transform: translateX(-50%); }
+.fflogs-timeline-time-axis { position: relative; height: 20px; margin-left: 85px; border-top: 1px solid var(--border-color); }
+.fflogs-timeline-time-label { position: absolute; font-size: 0.65rem; color: var(--text-muted); transform: translateX(-50%); top: 2px; }
+
+.fflogs-tooltip {
+  position: fixed; background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm); padding: var(--space-sm) var(--space-md);
+  font-size: 0.85rem; z-index: 1000; pointer-events: none;
+  box-shadow: var(--shadow-elevated); max-width: 300px;
+}
+
+.fflogs-fight-list { margin-top: var(--space-sm); }
+.fflogs-fight-row { display: grid; grid-template-columns: 30px 1fr 50px 70px 60px; gap: var(--space-sm); padding: var(--space-xs) 0; font-size: 0.85rem; border-bottom: 1px solid var(--border-color); }
+.fflogs-fight-row.header { color: var(--text-muted); font-weight: 600; }
+.fflogs-fight-kill { color: var(--accent-green); }
+.fflogs-fight-wipe { color: var(--accent-red); }
+
+.fflogs-actions { display: flex; gap: var(--space-sm); margin-top: var(--space-md); }
+
+@media (max-width: 768px) {
+  .fflogs-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .fflogs-death-table { grid-template-columns: repeat(4, 1fr); }
+  .fflogs-timeline-row-label { width: 50px; font-size: 0.65rem; }
+  .fflogs-timeline-track { left: 55px; }
+  .fflogs-timeline-time-axis { margin-left: 55px; }
+}
+@media (max-width: 480px) {
+  .fflogs-summary-grid { grid-template-columns: 1fr 1fr; }
+  .fflogs-death-table { grid-template-columns: repeat(2, 1fr); }
+}
 </style>
 </head>
 <body>
@@ -668,6 +762,35 @@ body.member-mode .captain-only { display: none !important; }
     <div class="form-group">
       <label for="generalNotes">📝 当日备注</label>
       <textarea id="generalNotes" rows="2" placeholder="关于本次开荒的整体备注..."></textarea>
+    </div>
+  </section>
+
+  <!-- FFLogs Data Import -->
+  <section id="fflogsSection" class="card" style="display:none;">
+    <h2>📊 FFLogs 数据导入</h2>
+    <div class="fflogs-url-row captain-only">
+      <input type="text" id="fflogsUrlInput" class="fflogs-url-input"
+             placeholder="粘贴 FFLogs 报告链接... (如 https://cn.fflogs.com/reports/xxx?fight=6)">
+      <button id="fflogsImportBtn" class="btn btn-primary fflogs-import-btn">📥 导入</button>
+    </div>
+    <div id="fflogsImportStatus" class="fflogs-status" style="display:none;"></div>
+    <div id="fflogsBossSelectPanel" class="fflogs-boss-select-panel" style="display:none;"></div>
+    <div id="fflogsMappingPanel" class="fflogs-mapping-panel" style="display:none;"></div>
+    <div id="fflogsDataDisplay" style="display:none;">
+      <div class="fflogs-summary-grid" id="fflogsSummaryGrid"></div>
+      <div id="fflogsDeathTable" class="fflogs-death-table"></div>
+      <div id="fflogsTimelineContainer" class="fflogs-timeline">
+        <h3 style="font-size:0.95rem; margin-bottom:var(--space-sm);">🎯 技能释放时间轴</h3>
+        <div id="fflogsTimeline"></div>
+      </div>
+      <details id="fflogsFightList">
+        <summary style="font-size:0.85rem; cursor:pointer; color:var(--text-secondary);">📋 详细战斗列表</summary>
+        <div id="fflogsFightListContent" class="fflogs-fight-list"></div>
+      </details>
+      <div class="fflogs-actions captain-only">
+        <button id="fflogsAutoFillBtn" class="btn btn-primary">🔄 同步最远进度到手动记录</button>
+        <button id="fflogsClearBtn" class="btn btn-danger">🗑 清除 FFLogs 数据</button>
+      </div>
     </div>
   </section>
 
@@ -877,6 +1000,7 @@ function createEmptyState() {
     memberNames: { MT:'', ST:'', H1:'', H2:'', D1:'', D2:'', D3:'', D4:'' },
     memberJobs: { MT:'GNB', ST:'PLD', H1:'WHM', H2:'SCH', D1:'SAM', D2:'RPR', D3:'MCH', D4:'RDM' },
     mistakePresets: [...DEFAULT_PRESETS],
+    playerMappingCache: {},
     days: {},
   };
 }
@@ -891,6 +1015,7 @@ function createEmptyDay() {
     generalNotes: '',
     members,
     teamIssues: [],
+    fflogs: null,
   };
 }
 
@@ -916,12 +1041,14 @@ function loadState() {
         if (state.token) {
           delete state.token;
         }
+        if (!state.playerMappingCache) state.playerMappingCache = {};
         for (const day of Object.values(state.days)) {
           for (const key of Object.keys(ROLES)) {
             if (!day.members[key]) day.members[key] = { mistakes: [] };
             if (!day.members[key].mistakes) day.members[key].mistakes = [];
           }
           if (!day.teamIssues) day.teamIssues = [];
+          if (!day.fflogs) day.fflogs = null;
         }
         return;
       }
@@ -1237,6 +1364,647 @@ function showSavedStatus() {
 }
 
 // ============================================================
+// SECTION 4B: FFLOGS INTEGRATION
+// ============================================================
+
+const FFLOGS_PROXY = 'https://inspiring-palmier-6885de.netlify.app';
+
+// FFLogs job slug → role mapping
+const FFLOGS_ROLE_MAP = {
+  'Paladin': 'tank', 'Warrior': 'tank', 'DarkKnight': 'tank', 'Gunbreaker': 'tank',
+  'WhiteMage': 'healer', 'Scholar': 'healer', 'Astrologian': 'healer', 'Sage': 'healer',
+  'Monk': 'dps', 'Dragoon': 'dps', 'Ninja': 'dps', 'Samurai': 'dps',
+  'RedMage': 'dps', 'BlackMage': 'dps', 'Summoner': 'dps', 'Machinist': 'dps',
+  'Bard': 'dps', 'Dancer': 'dps', 'Reaper': 'dps', 'Viper': 'dps', 'Pictomancer': 'dps',
+};
+
+// FFLogs job slug → our job key
+const FFLOGS_JOB_MAP = {
+  'Paladin': 'PLD', 'Warrior': 'WAR', 'DarkKnight': 'DRK', 'Gunbreaker': 'GNB',
+  'WhiteMage': 'WHM', 'Scholar': 'SCH', 'Astrologian': 'AST', 'Sage': 'SGE',
+  'Monk': 'MNK', 'Dragoon': 'DRG', 'Ninja': 'NIN', 'Samurai': 'SAM',
+  'RedMage': 'RDM', 'BlackMage': 'BLM', 'Summoner': 'SMN', 'Machinist': 'MCH',
+  'Bard': 'BRD', 'Dancer': 'DNC', 'Reaper': 'RPR', 'Viper': 'VPR', 'Pictomancer': 'PCT',
+};
+
+// Tracked abilities (user will provide detailed list later)
+const FFLOGS_TRACKED_ABILITIES = {};
+
+// GraphQL query templates
+const QL_FIGHTS = `
+query($code: String!) {
+  reportData {
+    report(code: $code) {
+      fights { id name kill startTime endTime bossPercentage fightPercentage lastPhase lastPhaseIsIntermission difficulty encounterID }
+      masterData { actors { id name server subType type } }
+    }
+  }
+}`;
+
+const QL_DEATHS = `
+query($code: String!, $fightIDs: [Int!], $startTime: Float, $endTime: Float) {
+  reportData {
+    report(code: $code) {
+      events(dataType: Deaths, fightIDs: $fightIDs, startTime: $startTime, endTime: $endTime, limit: 10000) { data nextPageTimestamp }
+    }
+  }
+}`;
+
+const QL_CASTS = `
+query($code: String!, $fightIDs: [Int!], $abilityID: Float, $startTime: Float, $endTime: Float) {
+  reportData {
+    report(code: $code) {
+      events(dataType: Casts, fightIDs: $fightIDs, abilityID: $abilityID, startTime: $startTime, endTime: $endTime, limit: 10000) { data nextPageTimestamp }
+    }
+  }
+}`;
+
+function parseFFLogsUrl(url) {
+  const match = url.match(/(?:cn|www|na|eu|jp)\.fflogs\.com\/reports\/([A-Za-z0-9]+)(?:[?#].*fight=(\d+))?/);
+  if (!match) return null;
+  return { code: match[1], fightId: match[2] ? parseInt(match[2]) : null };
+}
+
+async function fflogsGraphQL(query, variables) {
+  const resp = await fetch(FFLOGS_PROXY + '/graphql', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, variables }),
+  });
+  if (!resp.ok) throw new Error(`FFLogs proxy error: ${resp.status}`);
+  const data = await resp.json();
+  if (data.errors) throw new Error('FFLogs GraphQL error: ' + data.errors.map(e => e.message).join('; '));
+  return data.data;
+}
+
+async function fetchFights(code) {
+  const data = await fflogsGraphQL(QL_FIGHTS, { code });
+  const report = data.reportData.report;
+  return { fights: report.fights, actors: report.masterData.actors };
+}
+
+async function fetchAllDeaths(code, fightIDs) {
+  const allDeaths = [];
+  let nextStart = null;
+  const vars = { code, fightIDs };
+  if (nextStart) vars.startTime = nextStart;
+  while (true) {
+    if (nextStart) vars.startTime = nextStart;
+    const data = await fflogsGraphQL(QL_DEATHS, vars);
+    const events = data.reportData.report.events;
+    if (events.data) allDeaths.push(...(Array.isArray(events.data) ? events.data : JSON.parse(events.data)));
+    if (!events.nextPageTimestamp) break;
+    nextStart = events.nextPageTimestamp;
+  }
+  return allDeaths;
+}
+
+async function fetchCastsForAbility(code, fightIDs, abilityID) {
+  const allCasts = [];
+  let nextStart = null;
+  const vars = { code, fightIDs, abilityID };
+  while (true) {
+    if (nextStart) vars.startTime = nextStart;
+    const data = await fflogsGraphQL(QL_CASTS, vars);
+    const events = data.reportData.report.events;
+    if (events.data) allCasts.push(...(Array.isArray(events.data) ? events.data : JSON.parse(events.data)));
+    if (!events.nextPageTimestamp) break;
+    nextStart = events.nextPageTimestamp;
+  }
+  return allCasts;
+}
+
+function analyzeFights(fights, selectedEncounterID) {
+  const filtered = fights.filter(f => f.difficulty >= 100 && f.encounterID === selectedEncounterID);
+  if (filtered.length === 0) return null;
+
+  let totalFights = filtered.length;
+  let totalTime = 0;
+  let bestPhase = -1;
+  let bestBossPct = 100; // bossPercentage: lower = more progress
+  let hasKill = false;
+  let bossName = filtered[0].name;
+  let bestFight = filtered[0];
+
+  for (const f of filtered) {
+    totalTime += (f.endTime - f.startTime) || 0;
+    if (f.kill) { hasKill = true; }
+    else {
+      // Better progress: higher lastPhase, or same phase with lower bossPercentage
+      if (f.lastPhase > bestPhase || (f.lastPhase === bestPhase && (f.bossPercentage || 100) < bestBossPct)) {
+        bestPhase = f.lastPhase;
+        bestBossPct = f.bossPercentage || 100;
+        bestFight = f;
+      }
+    }
+  }
+
+  let furthestPhase;
+  if (hasKill) furthestPhase = 'Clear';
+  else {
+    const phaseNum = bestPhase + 1; // lastPhase is 0-indexed
+    if (bestFight.lastPhaseIsIntermission) furthestPhase = `P${phaseNum} 过渡`;
+    else furthestPhase = `P${phaseNum}`;
+    furthestPhase += ` ${bestBossPct.toFixed(1)}%`;
+  }
+
+  return { bossName, totalFights, totalTime, furthestPhase, bestPhase, bestBossPct, hasKill, fights: filtered };
+}
+
+function autoMapPlayers(actors, memberNames, playerMappingCache, memberJobs) {
+  const players = actors.filter(a => a.type === 'Player');
+  const mapping = {};
+  const unmapped = [];
+  const usedPositions = new Set();
+
+  // Try auto-match from cache and memberNames
+  for (const p of players) {
+    let matched = false;
+    // 1. Check playerMappingCache
+    if (playerMappingCache[p.name] && !usedPositions.has(playerMappingCache[p.name])) {
+      mapping[p.name] = playerMappingCache[p.name];
+      usedPositions.add(playerMappingCache[p.name]);
+      matched = true;
+    }
+    // 2. Check memberNames exact match
+    if (!matched) {
+      for (const [pos, name] of Object.entries(memberNames)) {
+        if (name === p.name && !usedPositions.has(pos)) {
+          mapping[p.name] = pos;
+          usedPositions.add(pos);
+          matched = true;
+          break;
+        }
+      }
+    }
+    if (!matched) unmapped.push(p);
+  }
+
+  return { mapping, unmapped, usedPositions, players };
+}
+
+function suggestPositionForPlayer(player, usedPositions) {
+  const role = FFLOGS_ROLE_MAP[player.subType] || 'dps';
+  const rolePositions = Object.entries(ROLES).filter(([k, v]) => v.role === role).map(([k]) => k);
+  for (const pos of rolePositions) {
+    if (!usedPositions.has(pos)) return pos;
+  }
+  return '';
+}
+
+function countDeathsByPosition(deathEvents, actorMapping) {
+  // actorMapping: { actorId: positionKey }
+  const counts = {};
+  for (const key of Object.keys(ROLES)) counts[key] = 0;
+  for (const event of deathEvents) {
+    const pos = actorMapping[event.targetID];
+    if (pos && counts[pos] !== undefined) counts[pos]++;
+  }
+  return counts;
+}
+
+function buildAbilityTimeline(castEvents, actorMapping, fights) {
+  // Build fight lookup for startTime offset
+  const fightMap = {};
+  for (const f of fights) fightMap[f.id] = f;
+  const timeline = [];
+  for (const event of castEvents) {
+    const pos = actorMapping[event.sourceID];
+    const fight = fightMap[event.fight];
+    if (pos && fight) {
+      // timestamp relative to fight start (events use report-absolute timestamps)
+      const relTs = event.timestamp - fight.startTime;
+      timeline.push({
+        player: pos,
+        ability: event.ability?.name || 'Unknown',
+        abilityId: event.ability?.gameID || 0,
+        timestamp: relTs,
+        fightId: event.fight,
+      });
+    }
+  }
+  return timeline;
+}
+
+function formatDuration(ms) {
+  if (ms < 1000) return `${ms}ms`;
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rs = s % 60;
+  if (m < 60) return `${m}m${rs}s`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return `${h}h${rm}m`;
+}
+
+// ===== FFLogs Import Flow =====
+
+let fflogsImportState = {
+  code: null, fightId: null, fights: null, actors: null,
+  selectedEncounterID: null, analysis: null, deathEvents: null,
+  actorMapping: {}, playerMapping: {},
+};
+
+async function startFFLogsImport() {
+  const urlInput = document.getElementById('fflogsUrlInput');
+  const statusEl = document.getElementById('fflogsImportStatus');
+  const url = urlInput.value.trim();
+  if (!url) { showToast('⚠️ 请输入 FFLogs 链接', 'error'); return; }
+
+  const parsed = parseFFLogsUrl(url);
+  if (!parsed) { showToast('❌ 无法解析链接，请检查格式', 'error'); return; }
+
+  fflogsImportState = { code: parsed.code, fightId: parsed.fightId, fights: null, actors: null, selectedEncounterID: null, analysis: null, deathEvents: null, actorMapping: {}, playerMapping: {} };
+
+  // Step 1: Fetch fights
+  showFFLogsStatus(statusEl, 'loading', '⏳ 正在获取战斗数据...');
+  try {
+    const data = await fetchFights(parsed.code);
+    fflogsImportState.fights = data.fights;
+    fflogsImportState.actors = data.actors;
+
+    // If single fight URL, auto-select that encounter
+    if (parsed.fightId) {
+      const targetFight = data.fights.find(f => f.id === parsed.fightId);
+      if (targetFight) {
+        fflogsImportState.selectedEncounterID = targetFight.encounterID;
+        proceedAfterBossSelect();
+      } else {
+        showFFLogsStatus(statusEl, 'error', `❌ 找不到第 ${parsed.fightId} 场战斗`);
+      }
+    } else {
+      // Full report: show boss selection panel
+      showBossSelectPanel(data.fights, statusEl);
+    }
+  } catch (err) {
+    showFFLogsStatus(statusEl, 'error', '❌ 获取数据失败: ' + err.message);
+  }
+}
+
+function showBossSelectPanel(allFights, statusEl) {
+  // Group fights by encounterID
+  const encounters = {};
+  for (const f of allFights) {
+    if (f.difficulty < 100) continue; // skip trash
+    if (!encounters[f.encounterID]) encounters[f.encounterID] = { name: f.name, id: f.encounterID, count: 0, kills: 0 };
+    encounters[f.encounterID].count++;
+    if (f.kill) encounters[f.encounterID].kills++;
+  }
+
+  const panel = document.getElementById('fflogsBossSelectPanel');
+  const encounterList = Object.values(encounters);
+  if (encounterList.length === 0) {
+    showFFLogsStatus(statusEl, 'error', '❌ 未找到高难度战斗记录');
+    panel.style.display = 'none';
+    return;
+  }
+  if (encounterList.length === 1) {
+    // Auto-select single encounter
+    fflogsImportState.selectedEncounterID = encounterList[0].id;
+    panel.style.display = 'none';
+    proceedAfterBossSelect();
+    return;
+  }
+
+  let html = '<h3 style="font-size:0.9rem;">选择要分析的 Boss</h3><div class="fflogs-boss-list">';
+  for (const enc of encounterList) {
+    html += `<div class="fflogs-boss-item" data-encounter-id="${enc.id}">
+      <span class="fflogs-boss-name">${enc.name}</span>
+      <span class="fflogs-boss-count">${enc.count} 场 (Clear ${enc.kills})</span>
+    </div>`;
+  }
+  html += '</div>';
+  panel.innerHTML = html;
+  panel.style.display = '';
+  statusEl.style.display = 'none';
+
+  // Click handler for boss selection
+  panel.querySelectorAll('.fflogs-boss-item').forEach(item => {
+    item.addEventListener('click', () => {
+      panel.querySelectorAll('.fflogs-boss-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      fflogsImportState.selectedEncounterID = parseInt(item.dataset.encounterId);
+      setTimeout(() => {
+        panel.style.display = 'none';
+        proceedAfterBossSelect();
+      }, 200);
+    });
+  });
+}
+
+async function proceedAfterBossSelect() {
+  const statusEl = document.getElementById('fflogsImportStatus');
+  const analysis = analyzeFights(fflogsImportState.fights, fflogsImportState.selectedEncounterID);
+  if (!analysis) {
+    showFFLogsStatus(statusEl, 'error', '❌ 未找到符合条件的战斗');
+    return;
+  }
+  fflogsImportState.analysis = analysis;
+
+  // Step 2: Auto-map players
+  const { mapping, unmapped, usedPositions, players } = autoMapPlayers(
+    fflogsImportState.actors, state.memberNames, state.playerMappingCache, state.memberJobs
+  );
+  fflogsImportState.playerMapping = mapping;
+
+  if (unmapped.length > 0) {
+    // Show mapping panel
+    showMappingPanel(unmapped, usedPositions, statusEl);
+  } else {
+    // All mapped, proceed
+    finishMappingAndFetch(statusEl);
+  }
+}
+
+function showMappingPanel(unmappedPlayers, usedPositions, statusEl) {
+  const panel = document.getElementById('fflogsMappingPanel');
+  let html = `<h3 style="font-size:0.9rem;">🔗 角色映射</h3>
+    <p style="font-size:0.8rem; color:var(--text-muted);">将 FFLogs 角色名映射到对应位置：</p>
+    <div class="fflogs-mapping-rows">`;
+
+  for (const p of unmatchedPlayers) {
+    const suggested = suggestPositionForPlayer(p, usedPositions);
+    const jobKey = FFLOGS_JOB_MAP[p.subType] || p.subType;
+    html += `<div class="fflogs-mapping-row" data-actor-id="${p.id}" data-actor-name="${escapeHtml(p.name)}">
+      <span class="player-name">${escapeHtml(p.name)}</span>
+      <span class="player-job">${jobKey}</span>
+      <select class="mapping-select" data-actor-id="${p.id}">
+        <option value="">-- 不映射 --</option>`;
+    for (const [pos, roleDef] of Object.entries(ROLES)) {
+      const selected = pos === suggested ? ' selected' : '';
+      html += `<option value="${pos}"${selected}>${roleDef.label}</option>`;
+    }
+    html += `</select></div>`;
+  }
+
+  html += '</div><div class="fflogs-mapping-actions">';
+  html += '<button class="btn btn-primary" id="fflogsMappingConfirm">✓ 确认映射</button>';
+  html += '<button class="btn" id="fflogsMappingCancel">取消</button>';
+  html += '</div>';
+
+  panel.innerHTML = html;
+  panel.style.display = '';
+  statusEl.style.display = 'none';
+
+  document.getElementById('fflogsMappingConfirm').onclick = () => {
+    // Collect mappings from dropdowns
+    panel.querySelectorAll('.mapping-select').forEach(sel => {
+      const actorId = parseInt(sel.dataset.actorId);
+      const position = sel.value;
+      if (position) {
+        const actor = unmatchedPlayers.find(p => p.id === actorId);
+        if (actor) fflogsImportState.playerMapping[actor.name] = position;
+      }
+    });
+    panel.style.display = 'none';
+    finishMappingAndFetch(statusEl);
+  };
+
+  document.getElementById('fflogsMappingCancel').onclick = () => {
+    panel.style.display = 'none';
+    showFFLogsStatus(statusEl, 'error', '❌ 已取消导入');
+  };
+}
+
+async function finishMappingAndFetch(statusEl) {
+  // Build actorId → position mapping
+  const actorIdMap = {};
+  const players = fflogsImportState.actors.filter(a => a.type === 'Player');
+  for (const p of players) {
+    const pos = fflogsImportState.playerMapping[p.name];
+    if (pos) actorIdMap[p.id] = pos;
+  }
+  fflogsImportState.actorMapping = actorIdMap;
+
+  // Save mapping to cache
+  for (const [name, pos] of Object.entries(fflogsImportState.playerMapping)) {
+    state.playerMappingCache[name] = pos;
+  }
+
+  // Step 3: Fetch deaths
+  showFFLogsStatus(statusEl, 'loading', '⏳ 正在获取死亡数据...');
+  try {
+    const fightIDs = fflogsImportState.analysis.fights.map(f => f.id);
+    const deathEvents = await fetchAllDeaths(fflogsImportState.code, fightIDs);
+    fflogsImportState.deathEvents = deathEvents;
+
+    // Step 4: Fetch tracked ability casts (if configured)
+    if (Object.keys(FFLOGS_TRACKED_ABILITIES).length > 0) {
+      showFFLogsStatus(statusEl, 'loading', '⏳ 正在获取技能数据...');
+      const allCasts = [];
+      for (const [abilityId] of Object.entries(FFLOGS_TRACKED_ABILITIES)) {
+        const casts = await fetchCastsForAbility(fflogsImportState.code, fightIDs, parseFloat(abilityId));
+        allCasts.push(...casts);
+      }
+      fflogsImportState.castEvents = allCasts;
+    } else {
+      fflogsImportState.castEvents = [];
+    }
+
+    // Step 5: Build final data and save
+    const deathsByPosition = countDeathsByPosition(deathEvents, actorIdMap);
+    const timeline = buildAbilityTimeline(fflogsImportState.castEvents || [], actorIdMap, fflogsImportState.analysis.fights);
+
+    const day = getActiveDay();
+    day.fflogs = {
+      reportCode: fflogsImportState.code,
+      fightId: fflogsImportState.fightId,
+      url: document.getElementById('fflogsUrlInput').value.trim(),
+      importedAt: Date.now(),
+      bossName: fflogsImportState.analysis.bossName,
+      furthestPhase: fflogsImportState.analysis.furthestPhase,
+      totalFights: fflogsImportState.analysis.totalFights,
+      totalTime: fflogsImportState.analysis.totalTime,
+      hasKill: fflogsImportState.analysis.hasKill,
+      deaths: deathsByPosition,
+      playerMapping: fflogsImportState.playerMapping,
+      abilityTimeline: timeline,
+      fights: fflogsImportState.analysis.fights.map(f => ({
+        id: f.id, kill: f.kill, duration: f.endTime - f.startTime,
+        fightPercentage: f.fightPercentage, lastPhase: f.lastPhase,
+        lastPhaseIsIntermission: f.lastPhaseIsIntermission,
+      })),
+    };
+
+    saveLocal();
+    showFFLogsStatus(statusEl, 'success', '✅ 导入完成');
+    renderFFLogsSection();
+
+  } catch (err) {
+    showFFLogsStatus(statusEl, 'error', '❌ 获取数据失败: ' + err.message);
+  }
+}
+
+function showFFLogsStatus(el, type, msg) {
+  el.style.display = '';
+  el.className = 'fflogs-status ' + type;
+  el.textContent = msg;
+}
+
+// ===== FFLogs Rendering =====
+
+function renderFFLogsSection() {
+  const section = document.getElementById('fflogsSection');
+  const day = state.days[activeDate];
+
+  if (isCaptain()) {
+    section.style.display = '';
+  } else if (day && day.fflogs) {
+    section.style.display = '';
+  } else {
+    section.style.display = 'none';
+    return;
+  }
+
+  // Show/hide captain-only elements
+  section.querySelectorAll('.captain-only').forEach(el => {
+    el.style.display = isCaptain() ? '' : 'none';
+  });
+
+  if (!day || !day.fflogs) {
+    document.getElementById('fflogsDataDisplay').style.display = 'none';
+    document.getElementById('fflogsImportStatus').style.display = 'none';
+    document.getElementById('fflogsBossSelectPanel').style.display = 'none';
+    document.getElementById('fflogsMappingPanel').style.display = 'none';
+    return;
+  }
+
+  const fl = day.fflogs;
+  document.getElementById('fflogsDataDisplay').style.display = '';
+  document.getElementById('fflogsImportStatus').style.display = 'none';
+  document.getElementById('fflogsBossSelectPanel').style.display = 'none';
+  document.getElementById('fflogsMappingPanel').style.display = 'none';
+
+  // Summary grid
+  const summaryGrid = document.getElementById('fflogsSummaryGrid');
+  summaryGrid.innerHTML = `
+    <div class="fflogs-stat"><span class="fflogs-stat-label">Boss</span><span class="fflogs-stat-value">${escapeHtml(fl.bossName)}</span></div>
+    <div class="fflogs-stat"><span class="fflogs-stat-label">最远进度</span><span class="fflogs-stat-value">${escapeHtml(fl.furthestPhase)}</span></div>
+    <div class="fflogs-stat"><span class="fflogs-stat-label">总场次</span><span class="fflogs-stat-value">${fl.totalFights}</span></div>
+    <div class="fflogs-stat"><span class="fflogs-stat-label">总时长</span><span class="fflogs-stat-value">${formatDuration(fl.totalTime)}</span></div>
+  `;
+
+  // Death table
+  const deathTable = document.getElementById('fflogsDeathTable');
+  let deathHtml = '';
+  for (const key of Object.keys(ROLES)) {
+    const count = fl.deaths[key] || 0;
+    let cls = 'zero';
+    if (count > 0 && count <= 3) cls = 'low';
+    if (count > 3 && count <= 8) cls = 'high';
+    if (count > 8) cls = 'very-high';
+    const roleEmoji = { tank: '🛡️', healer: '💚', dps: '⚔️' };
+    deathHtml += `<div class="fflogs-death-cell">
+      <span class="pos-label">${roleEmoji[ROLES[key].role]} ${ROLES[key].label}</span>
+      <span class="death-count ${cls}">${count}</span>
+    </div>`;
+  }
+  deathTable.innerHTML = deathHtml;
+
+  // Ability timeline
+  renderAbilityTimeline(fl);
+
+  // Fight list
+  renderFightList(fl);
+}
+
+function renderAbilityTimeline(fl) {
+  const container = document.getElementById('fflogsTimeline');
+  if (!fl.abilityTimeline || fl.abilityTimeline.length === 0) {
+    container.innerHTML = '<p style="font-size:0.85rem; color:var(--text-muted);">暂无追踪技能数据（需配置追踪技能列表）</p>';
+    return;
+  }
+
+  // Group timeline by player+ability
+  const groups = {};
+  for (const item of fl.abilityTimeline) {
+    const key = `${item.player}|${item.ability}`;
+    if (!groups[key]) groups[key] = { player: item.player, ability: item.ability, casts: [] };
+    groups[key].casts.push(item.timestamp);
+  }
+
+  const rows = Object.values(groups);
+  // Calculate total time range from fights
+  const maxTime = fl.totalTime || fl.fights.reduce((sum, f) => sum + f.duration, 0);
+  if (maxTime <= 0) { container.innerHTML = '<p style="color:var(--text-muted)">时间范围无效</p>'; return; }
+
+  // Build fight separators
+  const fightStarts = [];
+  let cumTime = 0;
+  for (const f of fl.fights) {
+    fightStarts.push({ time: cumTime, id: f.id, kill: f.kill });
+    cumTime += f.duration;
+  }
+
+  const roleColors = { tank: 'var(--role-tank)', healer: 'var(--role-healer)', dps: 'var(--role-dps)' };
+
+  let html = '';
+  for (const row of rows) {
+    const roleColor = roleColors[ROLES[row.player]?.role] || 'var(--accent-gold)';
+    html += `<div class="fflogs-timeline-row">
+      <div class="fflogs-timeline-row-label">${ROLES[row.player]?.label || row.player} ${row.ability}</div>
+      <div class="fflogs-timeline-track">`;
+    // Fight separators
+    for (const fs of fightStarts) {
+      const pct = (fs.time / maxTime) * 100;
+      html += `<div class="fflogs-timeline-separator" style="left:${pct}%"><span class="fflogs-timeline-sep-label">#${fs.id}</span></div>`;
+    }
+    // Cast markers
+    for (const ts of row.casts) {
+      const pct = (ts / maxTime) * 100;
+      if (pct < 0 || pct > 100) continue;
+      html += `<div class="fflogs-timeline-marker" style="left:${pct}%; background:${roleColor}" title="${row.ability} - ${ROLES[row.player]?.label} @ ${formatDuration(ts)}"></div>`;
+    }
+    html += '</div></div>';
+  }
+
+  // Time axis
+  html += '<div class="fflogs-timeline-time-axis">';
+  const numLabels = 6;
+  for (let i = 0; i <= numLabels; i++) {
+    const pct = (i / numLabels) * 100;
+    const time = (i / numLabels) * maxTime;
+    html += `<span class="fflogs-timeline-time-label" style="left:${pct}%">${formatDuration(time)}</span>`;
+  }
+  html += '</div>';
+
+  container.innerHTML = html;
+
+  // Add hover tooltip handler
+  container.querySelectorAll('.fflogs-timeline-marker').forEach(marker => {
+    marker.addEventListener('mouseenter', (e) => {
+      const existing = document.querySelector('.fflogs-tooltip');
+      if (existing) existing.remove();
+      const tip = document.createElement('div');
+      tip.className = 'fflogs-tooltip';
+      tip.textContent = marker.title;
+      tip.style.left = e.clientX + 10 + 'px';
+      tip.style.top = e.clientY - 20 + 'px';
+      document.body.appendChild(tip);
+    });
+    marker.addEventListener('mouseleave', () => {
+      const tip = document.querySelector('.fflogs-tooltip');
+      if (tip) tip.remove();
+    });
+  });
+}
+
+function renderFightList(fl) {
+  const content = document.getElementById('fflogsFightListContent');
+  let html = '<div class="fflogs-fight-row header"><span>#</span><span>结果</span><span>时长</span><span>进度</span><span>阶段</span></div>';
+  for (const f of fl.fights) {
+    const result = f.kill ? '<span class="fflogs-fight-kill">Clear</span>' : '<span class="fflogs-fight-wipe">Wipe</span>';
+    const pct = f.kill ? '100%' : `${(100 - (f.fightPercentage || 0)).toFixed(1)}%`;
+    const phase = f.lastPhaseIsIntermission ? `P${f.lastPhase+1}过渡` : `P${f.lastPhase+1}`;
+    html += `<div class="fflogs-fight-row">
+      <span>${f.id}</span>${result}<span>${formatDuration(f.duration)}</span><span>${pct}</span><span>${phase}</span>
+    </div>`;
+  }
+  content.innerHTML = html;
+}
+
+// ============================================================
 // SECTION 5: RENDERING
 // ============================================================
 
@@ -1246,6 +2014,7 @@ function renderAll() {
   renderDayNav();
   if (!document.getElementById('miniCalendar').hidden) renderCalendar();
   renderDaySummary();
+  renderFFLogsSection();
   renderMemberCards();
   renderTeamIssues();
   renderPresets();
@@ -1980,6 +2749,27 @@ document.getElementById('importFileInput').addEventListener('change', function(e
   };
   reader.readAsText(file);
   this.value = '';
+});
+
+// FFLogs event handlers
+document.getElementById('fflogsImportBtn')?.addEventListener('click', startFFLogsImport);
+
+document.getElementById('fflogsAutoFillBtn')?.addEventListener('click', function() {
+  const day = getActiveDay();
+  if (!day || !day.fflogs) { showToast('⚠️ 无 FFLogs 数据可同步', 'error'); return; }
+  day.furthestPhase = day.fflogs.furthestPhase;
+  document.getElementById('furthestPhase').value = day.furthestPhase;
+  saveLocal();
+  showToast('✅ 已同步最远进度到手动记录', 'success');
+});
+
+document.getElementById('fflogsClearBtn')?.addEventListener('click', function() {
+  const day = getActiveDay();
+  if (!day) return;
+  day.fflogs = null;
+  saveLocal();
+  renderFFLogsSection();
+  showToast('✅ 已清除 FFLogs 数据', 'success');
 });
 
 // ============================================================
