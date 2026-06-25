@@ -1388,7 +1388,42 @@ const FFLOGS_JOB_MAP = {
 };
 
 // Tracked abilities (user will provide detailed list later)
-const FFLOGS_TRACKED_ABILITIES = {};
+// All FFXIV mitigation ability IDs (gameID) — used to filter cast events locally
+const MITIGATION_ABILITIES = {
+  // Shared role
+  7535: 'Rampart', 7531: "Arm's Length", 7537: 'Reprisal', 7533: 'Feint', 7559: 'Addle', 7542: 'Mantra',
+  // Paladin
+  3540: 'Sheltron', 7382: 'Divine Veil', 7384: 'Intervention', 7385: 'Passage of Arms',
+  16459: 'Holy Sheltron', 25746: 'Bulwark',
+  // Warrior
+  3569: 'Thrill of Battle', 3570: 'Holmgang', 3571: 'Vengeance',
+  7430: 'Raw Intuition', 7432: 'Equilibrium', 7433: 'Shake It Off',
+  7434: 'Nascent Flash', 16137: 'Bloodwhetting', 25748: 'Damnation',
+  // Dark Knight
+  3583: 'Shadow Wall', 3585: 'Living Dead', 3587: 'Dark Mind',
+  7436: 'The Blackest Night', 16460: 'Oblation', 25750: 'Shadowed Vigor',
+  // Gunbreaker
+  7541: 'Camouflage', 7546: 'Nebula', 7549: 'Superbolide',
+  7560: 'Heart of Light', 7561: 'Aurora', 7562: 'Heart of Stone',
+  16138: 'Heart of Corundum', 25758: 'Trajectory',
+  // White Mage
+  136: 'Divine Benison', 16528: 'Aquaveil', 16531: 'Liturgy of the Bell',
+  16534: 'Temperance', 16542: 'Plenary Indulgence',
+  // Scholar
+  188: 'Sacred Soil', 7435: 'Excogitation', 16535: 'Expedient',
+  16537: 'Protraction', 16540: 'Recitation',
+  25781: 'Kerachole', 25782: 'Panhaima',
+  // Astrologian
+  4401: 'Collective Unconscious', 16543: 'Neutral Sect',
+  16545: 'Macrocosmos', 16546: 'Synastry', 25789: 'Divination',
+  // Sage
+  24373: 'Kerachole', 24374: 'Panhaima', 24375: 'Haima',
+  24378: 'Holos', 24382: 'Pepsis', 24383: 'Zoe',
+  24385: 'Krasis', 24386: 'Soteria', 24387: 'Druochole',
+  24388: 'Ixochole', 24390: 'Taurochole', 24391: 'Physis',
+  24393: 'Eukrasian Diagnosis', 24395: 'Eukrasian Prognosis',
+  25855: 'Philosophia',
+};
 
 // GraphQL query templates
 const QL_FIGHTS = `
@@ -1412,10 +1447,10 @@ query($code: String!, $fightIDs: [Int!], $startTime: Float, $endTime: Float) {
 }`;
 
 const QL_CASTS = `
-query($code: String!, $fightIDs: [Int!], $abilityID: Float, $startTime: Float, $endTime: Float) {
+query($code: String!, $fightIDs: [Int!], $startTime: Float, $endTime: Float) {
   reportData {
     report(code: $code) {
-      events(dataType: Casts, fightIDs: $fightIDs, abilityID: $abilityID, startTime: $startTime, endTime: $endTime, limit: 10000) { data nextPageTimestamp }
+      events(dataType: Casts, fightIDs: $fightIDs, startTime: $startTime, endTime: $endTime, limit: 10000) { data nextPageTimestamp }
     }
   }
 }`;
@@ -1475,10 +1510,10 @@ async function fetchAllDeaths(code, fightIDs) {
   return allDeaths;
 }
 
-async function fetchCastsForAbility(code, fightIDs, abilityID) {
+async function fetchAllCasts(code, fightIDs) {
   const allCasts = [];
   let nextStart = null;
-  const vars = { code, fightIDs, abilityID };
+  const vars = { code, fightIDs };
   while (true) {
     if (nextStart) vars.startTime = nextStart;
     const data = await fflogsGraphQL(QL_CASTS, vars);
@@ -1829,18 +1864,20 @@ async function finishMappingAndFetch(statusEl) {
     const deathEvents = await fetchAllDeaths(fflogsImportState.code, fightIDs);
     fflogsImportState.deathEvents = deathEvents;
 
-    // Step 4: Fetch tracked ability casts (if configured)
-    if (Object.keys(FFLOGS_TRACKED_ABILITIES).length > 0) {
-      showFFLogsStatus(statusEl, 'loading', '⏳ 正在获取技能数据...');
-      const allCasts = [];
-      for (const [abilityId] of Object.entries(FFLOGS_TRACKED_ABILITIES)) {
-        const casts = await fetchCastsForAbility(fflogsImportState.code, fightIDs, parseFloat(abilityId));
-        allCasts.push(...casts);
-      }
-      fflogsImportState.castEvents = allCasts;
-    } else {
-      fflogsImportState.castEvents = [];
+    // Step 4: Fetch all cast events, then filter for mitigation abilities locally
+    showFFLogsStatus(statusEl, 'loading', '⏳ 正在获取减伤技能数据...');
+    const allCasts = await fetchAllCasts(fflogsImportState.code, fightIDs);
+    // Filter: only keep mitigation ability casts from mapped players
+    const mitiIds = new Set(Object.keys(MITIGATION_ABILITIES).map(Number));
+    const mappedActorIds = new Set(Object.keys(fflogsImportState.actorMapping).map(Number));
+    const mitigationCasts = allCasts.filter(c =>
+      mitiIds.has(c.abilityGameID) && mappedActorIds.has(c.sourceID)
+    );
+    // Enrich with ability name
+    for (const c of mitigationCasts) {
+      c.ability = { name: MITIGATION_ABILITIES[c.abilityGameID] || 'Unknown', gameID: c.abilityGameID };
     }
+    fflogsImportState.castEvents = mitigationCasts;
 
     // Step 5: Build final data and save
     const deathsByPosition = countDeathsByPosition(deathEvents, actorIdMap);
