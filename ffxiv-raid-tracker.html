@@ -700,11 +700,22 @@ body.member-mode .captain-only { display: none !important; }
   .fflogs-tl-row-label { width: 80px; min-width: 80px; font-size: 0.65rem; }
   .fflogs-tl-time-axis { margin-left: 80px; }
 }
+
+/* Charts — Overview & Wipe Bar */
+.chart-controls { display: flex; gap: var(--space-sm); align-items: center; flex-wrap: wrap; margin-bottom: var(--space-md); }
+.chart-control-group { display: flex; align-items: center; gap: var(--space-xs); }
+.chart-control-group label { font-size: 0.82rem; color: var(--text-secondary); font-weight: 600; }
+.chart-select { padding: 6px 10px; border-radius: var(--border-radius-sm); background: var(--bg-input); color: var(--text-primary); border: 1px solid var(--border-color); font-size: 0.85rem; font-family: inherit; cursor: pointer; }
+.chart-select:focus { outline: none; border-color: var(--accent-gold); }
+.chart-container { position: relative; width: 100%; min-height: 300px; max-height: 450px; }
+.chart-empty { text-align: center; padding: var(--space-xl); color: var(--text-muted); }
+@media (max-width: 768px) { .chart-container { min-height: 250px; } .chart-controls { flex-direction: column; align-items: flex-start; } }
 @media (max-width: 480px) {
   .fflogs-summary-grid { grid-template-columns: 1fr 1fr; }
   .fflogs-death-table { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -829,6 +840,48 @@ body.member-mode .captain-only { display: none !important; }
   <!-- Member Grid -->
   <section id="membersGrid"></section>
 
+  <!-- Team Overview Chart -->
+  <section id="overviewChartSection" class="card" style="display:none;">
+    <h2>📈 队伍总览趋势</h2>
+    <div class="chart-controls">
+      <div class="chart-control-group">
+        <label for="overviewMetric">指标</label>
+        <select id="overviewMetric" class="chart-select">
+          <option value="progress">最远进度</option>
+          <option value="totalTime">累计开荒时长</option>
+          <option value="mistakes">犯错次数</option>
+        </select>
+      </div>
+      <div class="chart-control-group" id="overviewMemberFilter" style="display:none;">
+        <label for="overviewMember">成员</label>
+        <select id="overviewMember" class="chart-select">
+          <option value="all">全部成员</option>
+          <option value="MT">MT</option><option value="ST">ST</option>
+          <option value="H1">H1</option><option value="H2">H2</option>
+          <option value="D1">D1</option><option value="D2">D2</option>
+          <option value="D3">D3</option><option value="D4">D4</option>
+        </select>
+      </div>
+      <button class="btn btn-small" id="overviewCloseBtn">关闭</button>
+    </div>
+    <div class="chart-container"><canvas id="overviewChart"></canvas></div>
+    <div id="overviewEmpty" class="chart-empty" style="display:none;">暂无数据，请先记录开荒信息或导入 FFLogs 数据</div>
+  </section>
+
+  <!-- Wipe Count Bar Chart -->
+  <section id="wipeBarChartSection" class="card" style="display:none;">
+    <h2>📊 团灭次数分布</h2>
+    <div class="chart-controls">
+      <div class="chart-control-group">
+        <label for="wipeBarDate">选择日期</label>
+        <select id="wipeBarDate" class="chart-select"></select>
+      </div>
+      <button class="btn btn-small" id="wipeBarCloseBtn">关闭</button>
+    </div>
+    <div class="chart-container"><canvas id="wipeBarChart"></canvas></div>
+    <div id="wipeBarEmpty" class="chart-empty" style="display:none;">该日期暂无 FFLogs 战斗数据</div>
+  </section>
+
   <!-- Team Issues -->
   <section id="teamIssues" class="card">
     <h2>⚠️ 团队问题</h2>
@@ -848,6 +901,8 @@ body.member-mode .captain-only { display: none !important; }
   <!-- Bottom Actions -->
   <div id="bottomActions">
     <button id="generateSummaryBtn" class="btn btn-primary btn-large captain-only">📋 生成当日总结</button>
+    <button id="showOverviewBtn" class="btn btn-large">📈 队伍总览趋势</button>
+    <button id="showWipeBarBtn" class="btn btn-large">📊 团灭分布</button>
   </div>
 </div>
 
@@ -2375,6 +2430,146 @@ function renderAll() {
   renderPresets();
 }
 
+// ===== Chart Functions =====
+
+let overviewChartInstance = null;
+let wipeBarChartInstance = null;
+
+function phaseToNumeric(phaseStr) {
+  if (!phaseStr) return 0;
+  if (phaseStr === 'Clear') return 99;
+  const match = phaseStr.match(/^P(\d+)/);
+  if (!match) return 0;
+  return parseInt(match[1]);
+}
+
+function getChartDarkOptions(chartType) {
+  const opts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#b0b0c0', font: { size: 12, family: "'Segoe UI','PingFang SC',system-ui,sans-serif" }, boxWidth: 12, padding: 12 } },
+      tooltip: { backgroundColor: '#1f2b47', titleColor: '#c9a44b', bodyColor: '#e8e6e3', borderColor: '#2a3050', borderWidth: 1, cornerRadius: 6, padding: 10 },
+    },
+    scales: {
+      x: { ticks: { color: '#b0b0c0', font: { size: 11 } }, grid: { color: 'rgba(42,48,80,0.4)' } },
+      y: { ticks: { color: '#b0b0c0', font: { size: 11 } }, grid: { color: 'rgba(42,48,80,0.4)' } },
+    },
+  };
+  if (chartType === 'overview') {
+    opts.scales.y.ticks.callback = function(v) { if (v === 99) return 'Clear'; if (v >= 1) return 'P' + v; return '-'; };
+  }
+  if (chartType === 'wipeBar') {
+    opts.scales.y.beginAtZero = true;
+    opts.scales.y.ticks.stepSize = 1;
+  }
+  return opts;
+}
+
+function getOverviewChartData() {
+  const dates = Object.keys(state.days).sort();
+  const metric = document.getElementById('overviewMetric').value;
+  const labels = dates.map(d => d.slice(5)); // MM-DD
+  let datasets = [];
+
+  if (metric === 'progress') {
+    const data = dates.map(d => {
+      const day = state.days[d];
+      return phaseToNumeric(day.fflogs?.furthestPhase || day.furthestPhase);
+    });
+    datasets = [{ label: '最远进度', data, borderColor: '#c9a44b', backgroundColor: 'rgba(201,164,75,0.15)', tension: 0.3, fill: true, pointBackgroundColor: '#c9a44b', pointRadius: 4 }];
+  } else if (metric === 'totalTime') {
+    let cum = 0;
+    const data = dates.map(d => {
+      const day = state.days[d];
+      if (day.fflogs?.totalTime) cum += day.fflogs.totalTime;
+      return +(cum / 3600000).toFixed(1); // hours
+    });
+    datasets = [{ label: '累计开荒时长 (h)', data, borderColor: '#4a9eff', backgroundColor: 'rgba(74,158,255,0.15)', tension: 0.3, fill: true, pointBackgroundColor: '#4a9eff', pointRadius: 4 }];
+  } else if (metric === 'mistakes') {
+    const memberVal = document.getElementById('overviewMember').value;
+    const roleColors = { MT:'#4169e1', ST:'#5b8def', H1:'#2ecc71', H2:'#5fd99a', D1:'#e74c3c', D2:'#f07070', D3:'#e67e22', D4:'#f5a623' };
+    if (memberVal === 'all') {
+      for (const key of Object.keys(ROLES)) {
+        const data = dates.map(d => { const m = state.days[d].members[key]; return m ? m.mistakes.reduce((s, m) => s + (m.count || 1), 0) : 0; });
+        datasets.push({ label: ROLES[key].label, data, borderColor: roleColors[key], backgroundColor: 'transparent', tension: 0.2, pointRadius: 3, borderWidth: 2 });
+      }
+    } else {
+      const data = dates.map(d => { const m = state.days[d].members[memberVal]; return m ? m.mistakes.reduce((s, m) => s + (m.count || 1), 0) : 0; });
+      datasets = [{ label: ROLES[memberVal].label + ' 犯错次数', data, borderColor: roleColors[memberVal], backgroundColor: roleColors[memberVal] + '26', tension: 0.3, fill: true, pointBackgroundColor: roleColors[memberVal], pointRadius: 4 }];
+    }
+  }
+  return { labels, datasets };
+}
+
+function renderOverviewChart() {
+  if (!window.Chart) return;
+  const section = document.getElementById('overviewChartSection');
+  if (section.style.display === 'none') return;
+  const { labels, datasets } = getOverviewChartData();
+  const canvasEl = document.getElementById('overviewChart');
+  const emptyEl = document.getElementById('overviewEmpty');
+  if (labels.length === 0) { canvasEl.style.display = 'none'; emptyEl.style.display = ''; return; }
+  canvasEl.style.display = ''; emptyEl.style.display = 'none';
+  if (overviewChartInstance) { overviewChartInstance.destroy(); overviewChartInstance = null; }
+  overviewChartInstance = new Chart(canvasEl.getContext('2d'), { type: 'line', data: { labels, datasets }, options: getChartDarkOptions('overview') });
+}
+
+function updateOverviewMemberVisibility() {
+  document.getElementById('overviewMemberFilter').style.display = document.getElementById('overviewMetric').value === 'mistakes' ? '' : 'none';
+}
+
+function populateWipeBarDates() {
+  const select = document.getElementById('wipeBarDate');
+  select.innerHTML = '';
+  const dates = Object.keys(state.days).sort();
+  for (const d of dates) {
+    if (state.days[d].fflogs?.fights?.length > 0) {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d.slice(5);
+      select.appendChild(opt);
+    }
+  }
+  if (state.days[activeDate]?.fflogs?.fights?.length > 0) select.value = activeDate;
+}
+
+function getWipeBarChartData() {
+  const date = document.getElementById('wipeBarDate').value;
+  const day = state.days[date];
+  if (!day?.fflogs?.fights) return null;
+  const counts = {};
+  for (const f of day.fflogs.fights) {
+    if (!f.kill) {
+      const key = f.lastPhaseIsIntermission ? `P${f.lastPhase}过渡` : `P${f.lastPhase}`;
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  }
+  const sorted = Object.keys(counts).sort((a, b) => (parseInt(a.match(/\d+/)?.[0]) || 0) - (parseInt(b.match(/\d+/)?.[0]) || 0));
+  return {
+    labels: sorted,
+    datasets: [{ label: '团灭次数', data: sorted.map(p => counts[p]),
+      backgroundColor: sorted.map((_, i) => `hsla(${i * 35}, 70%, 50%, 0.7)`),
+      borderColor: sorted.map((_, i) => `hsl(${i * 35}, 70%, 50%)`),
+      borderWidth: 1, borderRadius: 4 }]
+  };
+}
+
+function renderWipeBarChart() {
+  if (!window.Chart) return;
+  const section = document.getElementById('wipeBarChartSection');
+  if (section.style.display === 'none') return;
+  populateWipeBarDates();
+  const chartData = getWipeBarChartData();
+  const canvasEl = document.getElementById('wipeBarChart');
+  const emptyEl = document.getElementById('wipeBarEmpty');
+  if (!chartData || chartData.labels.length === 0) { canvasEl.style.display = 'none'; emptyEl.style.display = ''; return; }
+  canvasEl.style.display = ''; emptyEl.style.display = 'none';
+  if (wipeBarChartInstance) { wipeBarChartInstance.destroy(); wipeBarChartInstance = null; }
+  wipeBarChartInstance = new Chart(canvasEl.getContext('2d'), { type: 'bar', data: chartData,
+    options: { ...getChartDarkOptions('wipeBar'), plugins: { ...getChartDarkOptions('wipeBar').plugins, legend: { display: false } } } });
+}
+
 function renderQuickBarIcons() {
   for (const key of Object.keys(ROLES)) {
     const btn = document.getElementById('qb' + key);
@@ -3035,6 +3230,38 @@ document.getElementById('generateSummaryBtn').addEventListener('click', function
   const text = buildSummaryText(activeDate);
   document.getElementById('summaryText').textContent = text;
   document.getElementById('summaryModal').hidden = false;
+});
+
+// ===== Chart Event Bindings =====
+document.getElementById('showOverviewBtn').addEventListener('click', function() {
+  if (!window.Chart) { showToast('⚠️ Chart.js 未加载，请检查网络', 'error'); return; }
+  document.getElementById('overviewChartSection').style.display = '';
+  updateOverviewMemberVisibility();
+  renderOverviewChart();
+});
+document.getElementById('overviewCloseBtn').addEventListener('click', function() {
+  document.getElementById('overviewChartSection').style.display = 'none';
+  if (overviewChartInstance) { overviewChartInstance.destroy(); overviewChartInstance = null; }
+});
+document.getElementById('overviewMetric').addEventListener('change', function() {
+  updateOverviewMemberVisibility();
+  renderOverviewChart();
+});
+document.getElementById('overviewMember').addEventListener('change', function() {
+  renderOverviewChart();
+});
+
+document.getElementById('showWipeBarBtn').addEventListener('click', function() {
+  if (!window.Chart) { showToast('⚠️ Chart.js 未加载，请检查网络', 'error'); return; }
+  document.getElementById('wipeBarChartSection').style.display = '';
+  renderWipeBarChart();
+});
+document.getElementById('wipeBarCloseBtn').addEventListener('click', function() {
+  document.getElementById('wipeBarChartSection').style.display = 'none';
+  if (wipeBarChartInstance) { wipeBarChartInstance.destroy(); wipeBarChartInstance = null; }
+});
+document.getElementById('wipeBarDate').addEventListener('change', function() {
+  renderWipeBarChart();
 });
 
 document.getElementById('closeModalBtn').addEventListener('click', function() {
