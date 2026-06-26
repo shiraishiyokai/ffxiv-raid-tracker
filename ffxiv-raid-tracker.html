@@ -872,8 +872,12 @@ body.member-mode .captain-only { display: none !important; }
 
   <!-- Wipe Count Bar Chart -->
   <section id="wipeBarChartSection" class="card" style="display:none;">
-    <h2>📊 团灭次数分布 — <span id="wipeBarDateLabel"></span></h2>
+    <h2>📊 团灭次数分布</h2>
     <div class="chart-controls">
+      <div class="chart-control-group">
+        <label for="wipeBarDate">选择日期</label>
+        <select id="wipeBarDate" class="chart-select"></select>
+      </div>
       <button class="btn btn-small" id="wipeBarCloseBtn">关闭</button>
     </div>
     <div class="chart-container"><canvas id="wipeBarChart"></canvas></div>
@@ -2561,8 +2565,25 @@ function updateOverviewMemberVisibility() {
   document.getElementById('overviewMemberFilter').style.display = document.getElementById('overviewMetric').value === 'mistakes' ? '' : 'none';
 }
 
+function populateWipeBarDates() {
+  const select = document.getElementById('wipeBarDate');
+  select.innerHTML = '';
+  const dates = Object.keys(state.days).sort();
+  for (const d of dates) {
+    if (state.days[d].fflogs?.fights?.length > 0) {
+      const opt = document.createElement('option');
+      opt.value = d;
+      opt.textContent = d.slice(5);
+      select.appendChild(opt);
+    }
+  }
+  // Default to activeDate if it has fights data
+  if (state.days[activeDate]?.fflogs?.fights?.length > 0) select.value = activeDate;
+}
+
 function getWipeBarChartData() {
-  const day = state.days[activeDate];
+  const date = document.getElementById('wipeBarDate').value;
+  const day = state.days[date];
   if (!day?.fflogs?.fights) return null;
   const counts = {};
   for (const f of day.fflogs.fights) {
@@ -2585,8 +2606,7 @@ function renderWipeBarChart() {
   if (!window.Chart) return;
   const section = document.getElementById('wipeBarChartSection');
   if (section.style.display === 'none') return;
-  // Update date label in title
-  document.getElementById('wipeBarDateLabel').textContent = activeDate;
+  populateWipeBarDates();
   const chartData = getWipeBarChartData();
   const canvasEl = document.getElementById('wipeBarChart');
   const emptyEl = document.getElementById('wipeBarEmpty');
@@ -3306,6 +3326,9 @@ document.getElementById('wipeBarCloseBtn').addEventListener('click', function() 
   document.getElementById('wipeBarChartSection').style.display = 'none';
   document.getElementById('showWipeBarBtn').classList.remove('btn-active');
   if (wipeBarChartInstance) { wipeBarChartInstance.destroy(); wipeBarChartInstance = null; }
+});
+document.getElementById('wipeBarDate').addEventListener('change', function() {
+  renderWipeBarChart();
 });
 
 document.getElementById('closeModalBtn').addEventListener('click', function() {
