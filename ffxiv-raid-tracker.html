@@ -872,12 +872,8 @@ body.member-mode .captain-only { display: none !important; }
 
   <!-- Wipe Count Bar Chart -->
   <section id="wipeBarChartSection" class="card" style="display:none;">
-    <h2>📊 团灭次数分布</h2>
+    <h2>📊 团灭次数分布 — <span id="wipeBarDateLabel"></span></h2>
     <div class="chart-controls">
-      <div class="chart-control-group">
-        <label for="wipeBarDate">选择日期</label>
-        <select id="wipeBarDate" class="chart-select"></select>
-      </div>
       <button class="btn btn-small" id="wipeBarCloseBtn">关闭</button>
     </div>
     <div class="chart-container"><canvas id="wipeBarChart"></canvas></div>
@@ -2438,12 +2434,24 @@ let wipeBarChartInstance = null;
 function phaseToNumeric(phaseStr) {
   if (!phaseStr) return 0;
   if (phaseStr === 'Clear') return 99;
-  const match = phaseStr.match(/^P(\d+)/);
+  const match = phaseStr.match(/^P(\d+)(?:\s+([\d.]+)%)?/);
   if (!match) return 0;
-  return parseInt(match[1]);
+  const phase = parseInt(match[1]);
+  const pct = match[2] ? parseFloat(match[2]) : 100;
+  // Lower boss HP = further progress → higher numeric value
+  return phase + (100 - pct) / 100;
 }
 
-function getChartDarkOptions(chartType) {
+function formatPhaseLabel(phaseStr) {
+  if (!phaseStr || phaseStr === 'Clear') return 'Clear';
+  const match = phaseStr.match(/^P(\d+)(?:\s+([\d.]+)%)?/);
+  if (!match) return phaseStr;
+  const phase = match[1];
+  const pct = match[2];
+  return pct ? `P${phase} ${pct}%` : `P${phase}`;
+}
+
+function getChartDarkOptions(chartType, metric) {
   const opts = {
     responsive: true,
     maintainAspectRatio: false,
@@ -2457,7 +2465,18 @@ function getChartDarkOptions(chartType) {
     },
   };
   if (chartType === 'overview') {
-    opts.scales.y.ticks.callback = function(v) { if (v === 99) return 'Clear'; if (v >= 1) return 'P' + v; return '-'; };
+    if (metric === 'progress') {
+      // Y-axis: show P labels at integer marks, tooltip shows detailed phase label
+      opts.scales.y.ticks.callback = function(v) { if (v === 99) return 'Clear'; if (v >= 1 && v < 99 && Math.abs(v - Math.round(v)) < 0.05) return 'P' + Math.round(v); return ''; };
+    } else if (metric === 'mistakes') {
+      opts.scales.y.beginAtZero = true;
+      opts.scales.y.ticks.stepSize = 1;
+      opts.scales.y.ticks.callback = function(v) { return v; };
+      opts.plugins.tooltip.callbacks = { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + '次'; } };
+    } else if (metric === 'totalTime') {
+      opts.scales.y.ticks.callback = function(v) { return v + 'h'; };
+      opts.plugins.tooltip.callbacks = { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + '小时'; } };
+    }
   }
   if (chartType === 'wipeBar') {
     opts.scales.y.beginAtZero = true;
@@ -2473,11 +2492,17 @@ function getOverviewChartData() {
   let datasets = [];
 
   if (metric === 'progress') {
-    const data = dates.map(d => {
+    const rawData = dates.map(d => {
       const day = state.days[d];
-      return phaseToNumeric(day.fflogs?.furthestPhase || day.furthestPhase);
+      return day.fflogs?.furthestPhase || day.furthestPhase;
     });
-    datasets = [{ label: '最远进度', data, borderColor: '#c9a44b', backgroundColor: 'rgba(201,164,75,0.15)', tension: 0.3, fill: true, pointBackgroundColor: '#c9a44b', pointRadius: 4 }];
+    const data = rawData.map(p => phaseToNumeric(p));
+    // Store phase labels for tooltip display
+    const phaseLabels = rawData.map(p => formatPhaseLabel(p));
+    datasets = [{
+      label: '最远进度', data, phaseLabels,
+      borderColor: '#c9a44b', backgroundColor: 'rgba(201,164,75,0.15)', tension: 0.3, fill: true, pointBackgroundColor: '#c9a44b', pointRadius: 4
+    }];
   } else if (metric === 'totalTime') {
     let cum = 0;
     const data = dates.map(d => {
@@ -2506,37 +2531,32 @@ function renderOverviewChart() {
   if (!window.Chart) return;
   const section = document.getElementById('overviewChartSection');
   if (section.style.display === 'none') return;
+  const metric = document.getElementById('overviewMetric').value;
   const { labels, datasets } = getOverviewChartData();
   const canvasEl = document.getElementById('overviewChart');
   const emptyEl = document.getElementById('overviewEmpty');
   if (labels.length === 0) { canvasEl.style.display = 'none'; emptyEl.style.display = ''; return; }
   canvasEl.style.display = ''; emptyEl.style.display = 'none';
   if (overviewChartInstance) { overviewChartInstance.destroy(); overviewChartInstance = null; }
-  overviewChartInstance = new Chart(canvasEl.getContext('2d'), { type: 'line', data: { labels, datasets }, options: getChartDarkOptions('overview') });
+  const chartOpts = getChartDarkOptions('overview', metric);
+  // Progress metric: custom tooltip to show "P3 50%" format
+  if (metric === 'progress') {
+    chartOpts.plugins.tooltip.callbacks = {
+      label: function(ctx) {
+        const phaseLabel = ctx.dataset.phaseLabels ? ctx.dataset.phaseLabels[ctx.dataIndex] : '';
+        return ctx.dataset.label + ': ' + phaseLabel;
+      }
+    };
+  }
+  overviewChartInstance = new Chart(canvasEl.getContext('2d'), { type: 'line', data: { labels, datasets }, options: chartOpts });
 }
 
 function updateOverviewMemberVisibility() {
   document.getElementById('overviewMemberFilter').style.display = document.getElementById('overviewMetric').value === 'mistakes' ? '' : 'none';
 }
 
-function populateWipeBarDates() {
-  const select = document.getElementById('wipeBarDate');
-  select.innerHTML = '';
-  const dates = Object.keys(state.days).sort();
-  for (const d of dates) {
-    if (state.days[d].fflogs?.fights?.length > 0) {
-      const opt = document.createElement('option');
-      opt.value = d;
-      opt.textContent = d.slice(5);
-      select.appendChild(opt);
-    }
-  }
-  if (state.days[activeDate]?.fflogs?.fights?.length > 0) select.value = activeDate;
-}
-
 function getWipeBarChartData() {
-  const date = document.getElementById('wipeBarDate').value;
-  const day = state.days[date];
+  const day = state.days[activeDate];
   if (!day?.fflogs?.fights) return null;
   const counts = {};
   for (const f of day.fflogs.fights) {
@@ -2559,7 +2579,8 @@ function renderWipeBarChart() {
   if (!window.Chart) return;
   const section = document.getElementById('wipeBarChartSection');
   if (section.style.display === 'none') return;
-  populateWipeBarDates();
+  // Update date label in title
+  document.getElementById('wipeBarDateLabel').textContent = activeDate;
   const chartData = getWipeBarChartData();
   const canvasEl = document.getElementById('wipeBarChart');
   const emptyEl = document.getElementById('wipeBarEmpty');
@@ -3235,12 +3256,22 @@ document.getElementById('generateSummaryBtn').addEventListener('click', function
 // ===== Chart Event Bindings =====
 document.getElementById('showOverviewBtn').addEventListener('click', function() {
   if (!window.Chart) { showToast('⚠️ Chart.js 未加载，请检查网络', 'error'); return; }
-  document.getElementById('overviewChartSection').style.display = '';
-  updateOverviewMemberVisibility();
-  renderOverviewChart();
+  const section = document.getElementById('overviewChartSection');
+  const btn = this;
+  if (section.style.display === 'none') {
+    section.style.display = '';
+    btn.classList.add('btn-active');
+    updateOverviewMemberVisibility();
+    renderOverviewChart();
+  } else {
+    section.style.display = 'none';
+    btn.classList.remove('btn-active');
+    if (overviewChartInstance) { overviewChartInstance.destroy(); overviewChartInstance = null; }
+  }
 });
 document.getElementById('overviewCloseBtn').addEventListener('click', function() {
   document.getElementById('overviewChartSection').style.display = 'none';
+  document.getElementById('showOverviewBtn').classList.remove('btn-active');
   if (overviewChartInstance) { overviewChartInstance.destroy(); overviewChartInstance = null; }
 });
 document.getElementById('overviewMetric').addEventListener('change', function() {
@@ -3253,15 +3284,22 @@ document.getElementById('overviewMember').addEventListener('change', function() 
 
 document.getElementById('showWipeBarBtn').addEventListener('click', function() {
   if (!window.Chart) { showToast('⚠️ Chart.js 未加载，请检查网络', 'error'); return; }
-  document.getElementById('wipeBarChartSection').style.display = '';
-  renderWipeBarChart();
+  const section = document.getElementById('wipeBarChartSection');
+  const btn = this;
+  if (section.style.display === 'none') {
+    section.style.display = '';
+    btn.classList.add('btn-active');
+    renderWipeBarChart();
+  } else {
+    section.style.display = 'none';
+    btn.classList.remove('btn-active');
+    if (wipeBarChartInstance) { wipeBarChartInstance.destroy(); wipeBarChartInstance = null; }
+  }
 });
 document.getElementById('wipeBarCloseBtn').addEventListener('click', function() {
   document.getElementById('wipeBarChartSection').style.display = 'none';
+  document.getElementById('showWipeBarBtn').classList.remove('btn-active');
   if (wipeBarChartInstance) { wipeBarChartInstance.destroy(); wipeBarChartInstance = null; }
-});
-document.getElementById('wipeBarDate').addEventListener('change', function() {
-  renderWipeBarChart();
 });
 
 document.getElementById('closeModalBtn').addEventListener('click', function() {
