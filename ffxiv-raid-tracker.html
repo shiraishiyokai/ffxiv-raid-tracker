@@ -1682,6 +1682,11 @@ function analyzeFights(fights, selectedEncounterID) {
 }
 
 function autoMapPlayers(actors, memberNames, playerMappingCache, memberJobs, fightPlayerIds) {
+  // Guard against undefined params
+  memberNames = memberNames || {};
+  playerMappingCache = playerMappingCache || {};
+  memberJobs = memberJobs || {};
+
   // Filter: only real players with a valid job, and only those in the selected fights
   const INVALID_SUBTYPES = ['LimitBreak', 'Unknown', 'Pet', 'NPC', 'Boss'];
   let players = actors.filter(a =>
