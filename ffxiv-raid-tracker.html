@@ -1191,6 +1191,11 @@ async function syncToCloud() {
         }
         mergeBase.teamId = state.teamId;
         mergeBase.teamName = state.teamName;
+        // Ensure new fields exist after cloud merge
+        if (!mergeBase.playerMappingCache) mergeBase.playerMappingCache = {};
+        if (!mergeBase.memberNames) mergeBase.memberNames = { MT:'', ST:'', H1:'', H2:'', D1:'', D2:'', D3:'', D4:'' };
+        if (!mergeBase.memberJobs) mergeBase.memberJobs = { MT:'GNB', ST:'PLD', H1:'WHM', H2:'SCH', D1:'SAM', D2:'RPR', D3:'MCH', D4:'RDM' };
+        if (!mergeBase.mistakePresets) mergeBase.mistakePresets = [...DEFAULT_PRESETS];
         state = mergeBase;
         saveLocal();
       }
@@ -1936,7 +1941,11 @@ async function proceedAfterBossSelect() {
   });
 
   const { mapping, unmapped, usedPositions, players } = autoMapPlayers(
-    fflogsImportState.actors, state.memberNames, state.playerMappingCache, state.memberJobs, realPlayerIds
+    fflogsImportState.actors,
+    state.memberNames || {},
+    state.playerMappingCache || {},
+    state.memberJobs || {},
+    realPlayerIds
   );
   fflogsImportState.playerMapping = mapping;
 
