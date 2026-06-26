@@ -2298,6 +2298,7 @@ function renderAbilityTimeline(fl) {
     for (const pt of phaseData) {
       const relTs = pt.startTime - (currentFight?.startTime || 0);
       if (relTs < 0 || relTs > fightDuration) continue;
+      if (relTs < 1000) continue; // Skip P1 start transition at fight start
       const leftPx = relTs * pxPerMs;
       const phaseLabel = `P${pt.phase}`;
       const timeLabel = `${(relTs / 1000).toFixed(1)}s`;
@@ -2342,6 +2343,7 @@ function renderAbilityTimeline(fl) {
     for (const pt of phaseData) {
       const relTs = pt.startTime - (currentFight?.startTime || 0);
       if (relTs < 0 || relTs > fightDuration) continue;
+      if (relTs < 1000) continue; // Skip P1 start transition at fight start
       const leftPx = relTs * pxPerMs + 120; // offset for row label width
       html += `<div class="fflogs-tl-phase-line" style="left:${leftPx}px; height:${totalRows * rowHeight}px"></div>`;
     }
