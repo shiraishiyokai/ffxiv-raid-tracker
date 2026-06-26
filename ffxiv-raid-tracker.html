@@ -2424,6 +2424,9 @@ function renderAll() {
   renderMemberCards();
   renderTeamIssues();
   renderPresets();
+  // Re-render visible charts on date change
+  if (document.getElementById('wipeBarChartSection').style.display !== 'none') renderWipeBarChart();
+  if (document.getElementById('overviewChartSection').style.display !== 'none') renderOverviewChart();
 }
 
 // ===== Chart Functions =====
