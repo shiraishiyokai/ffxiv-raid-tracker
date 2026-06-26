@@ -1690,9 +1690,10 @@ async function fetchPhaseTransitions(code, fightIDs) {
         // Sort by startTime to ensure correct order
         const sorted = [...f.phaseTransitions].sort((a, b) => a.startTime - b.startTime);
         // PhaseTransition.id is a unique identifier, not the phase number.
-        // Infer phase number from order: 1st transition = P2 boundary, 2nd = P3, etc.
+        // Infer phase number from order: 1st transition = entering P2 boundary, 2nd = P3, etc.
+        // FFLogs includes a P1 start transition, so idx=0 → P1, idx=1 → P2, etc.
         result[f.id] = sorted.map((pt, idx) => ({
-          phase: idx + 2, // P1→P2 = phase 2, P2→P3 = phase 3, etc.
+          phase: idx + 1,
           startTime: pt.startTime,
         }));
       }
