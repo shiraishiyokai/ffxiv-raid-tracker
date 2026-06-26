@@ -2087,6 +2087,7 @@ async function finishMappingAndFetch(statusEl) {
     };
 
     saveLocal();
+    debouncedSaveToCloud();
     showFFLogsStatus(statusEl, 'success', '✅ 导入完成');
     renderFFLogsSection();
 
