@@ -1331,11 +1331,15 @@ async function fetchFromCloud(silent) {
     const localTeamId = state.teamId;
     const localTeamName = state.teamName;
     const localMemberJobs = state.memberJobs;
+    const localMemberNames = state.memberNames;
+    const localPlayerMappingCache = state.playerMappingCache;
     state = content;
     if (!state.mistakePresets) state.mistakePresets = localPresets;
     state.teamId = localTeamId;
     state.teamName = localTeamName;
     if (!state.memberJobs) state.memberJobs = localMemberJobs || { MT:'GNB', ST:'PLD', H1:'WHM', H2:'SCH', D1:'SAM', D2:'RPR', D3:'MCH', D4:'RDM' };
+    if (!state.memberNames) state.memberNames = localMemberNames || { MT:'', ST:'', H1:'', H2:'', D1:'', D2:'', D3:'', D4:'' };
+    if (!state.playerMappingCache) state.playerMappingCache = localPlayerMappingCache || {};
 
     saveLocal();
     lastCloudFetch = cloudStr;
