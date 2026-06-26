@@ -149,6 +149,16 @@ body.member-mode .captain-only { display: none !important; }
 .btn-icon { padding: 6px 10px; font-size: 0.9rem; }
 .btn-active { background: var(--accent-gold); color: var(--bg-primary); border-color: var(--accent-gold); }
 
+/* Wipe Bar Calendar */
+.wipe-cal { margin-bottom: var(--space-sm); }
+.wipe-cal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); }
+.wipe-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.wipe-cal-dow { text-align: center; font-size: 0.72rem; color: var(--text-muted); padding: 2px 0; }
+.wipe-cal-day { text-align: center; font-size: 0.78rem; padding: 4px 0; border-radius: 4px; cursor: default; color: var(--text-muted); }
+.wipe-cal-day.has-fights { cursor: pointer; color: var(--text-primary); background: rgba(46,204,113,0.15); }
+.wipe-cal-day.has-fights:hover { background: rgba(46,204,113,0.35); }
+.wipe-cal-day.selected { background: var(--accent-gold) !important; color: var(--bg-primary) !important; font-weight: 700; }
+
 /* ============================================================
    Connection Bar
    ============================================================ */
@@ -874,10 +884,7 @@ body.member-mode .captain-only { display: none !important; }
   <section id="wipeBarChartSection" class="card" style="display:none;">
     <h2>📊 团灭次数分布</h2>
     <div class="chart-controls">
-      <div class="chart-control-group">
-        <label for="wipeBarDate">选择日期</label>
-        <select id="wipeBarDate" class="chart-select"></select>
-      </div>
+      <div id="wipeBarCalendar" class="wipe-cal"></div>
       <button class="btn btn-small" id="wipeBarCloseBtn">关闭</button>
     </div>
     <div class="chart-container"><canvas id="wipeBarChart"></canvas></div>
@@ -2440,6 +2447,8 @@ function renderAll() {
 
 let overviewChartInstance = null;
 let wipeBarChartInstance = null;
+let wipeBarCalMonth = null;
+let wipeBarSelectedDate = null;
 
 function phaseToNumeric(phaseStr) {
   if (!phaseStr) return 0;
@@ -2565,25 +2574,54 @@ function updateOverviewMemberVisibility() {
   document.getElementById('overviewMemberFilter').style.display = document.getElementById('overviewMetric').value === 'mistakes' ? '' : 'none';
 }
 
-function populateWipeBarDates() {
-  const select = document.getElementById('wipeBarDate');
-  select.innerHTML = '';
-  const dates = Object.keys(state.days).sort();
-  for (const d of dates) {
-    if (state.days[d].fflogs?.fights?.length > 0) {
-      const opt = document.createElement('option');
-      opt.value = d;
-      opt.textContent = d.slice(5);
-      select.appendChild(opt);
-    }
+function renderWipeBarCalendar() {
+  const container = document.getElementById('wipeBarCalendar');
+  if (!container) return;
+  if (!wipeBarCalMonth) wipeBarCalMonth = activeDate.slice(0, 7);
+  if (!wipeBarSelectedDate) wipeBarSelectedDate = activeDate;
+  const [year, month] = wipeBarCalMonth.split('-').map(Number);
+  const firstDay = new Date(year, month - 1, 1);
+  const startDow = firstDay.getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // Find dates with FFLogs fights data
+  const fightDates = new Set();
+  for (const d of Object.keys(state.days)) {
+    if (d.startsWith(wipeBarCalMonth) && state.days[d].fflogs?.fights?.length > 0) fightDates.add(d);
   }
-  // Default to activeDate if it has fights data
-  if (state.days[activeDate]?.fflogs?.fights?.length > 0) select.value = activeDate;
+  let html = `<div class="wipe-cal-header"><button class="btn btn-small" id="wipeCalPrev">◀</button><span>${year}年${month}月</span><button class="btn btn-small" id="wipeCalNext">▶</button></div>`;
+  html += '<div class="wipe-cal-grid">';
+  for (const dn of ['日','一','二','三','四','五','六']) html += `<div class="wipe-cal-dow">${dn}</div>`;
+  for (let i = 0; i < startDow; i++) html += '<div></div>';
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = `${wipeBarCalMonth}-${String(d).padStart(2, '0')}`;
+    const has = fightDates.has(iso);
+    const sel = iso === wipeBarSelectedDate;
+    const cls = 'wipe-cal-day' + (has ? ' has-fights' : '') + (sel ? ' selected' : '');
+    html += `<div class="${cls}" data-date="${iso}">${d}</div>`;
+  }
+  html += '</div>';
+  container.innerHTML = html;
+  // Month nav
+  document.getElementById('wipeCalPrev').addEventListener('click', () => {
+    wipeBarCalMonth = month === 1 ? `${year-1}-12` : `${year}-${String(month-1).padStart(2,'0')}`;
+    renderWipeBarCalendar();
+  });
+  document.getElementById('wipeCalNext').addEventListener('click', () => {
+    wipeBarCalMonth = month === 12 ? `${year+1}-01` : `${year}-${String(month+1).padStart(2,'0')}`;
+    renderWipeBarCalendar();
+  });
+  // Date click
+  container.querySelectorAll('.wipe-cal-day.has-fights').forEach(el => {
+    el.addEventListener('click', () => {
+      wipeBarSelectedDate = el.dataset.date;
+      renderWipeBarCalendar();
+      renderWipeBarChart();
+    });
+  });
 }
 
 function getWipeBarChartData() {
-  const date = document.getElementById('wipeBarDate').value;
-  const day = state.days[date];
+  const day = state.days[wipeBarSelectedDate];
   if (!day?.fflogs?.fights) return null;
   const counts = {};
   for (const f of day.fflogs.fights) {
@@ -2606,7 +2644,7 @@ function renderWipeBarChart() {
   if (!window.Chart) return;
   const section = document.getElementById('wipeBarChartSection');
   if (section.style.display === 'none') return;
-  populateWipeBarDates();
+  renderWipeBarCalendar();
   const chartData = getWipeBarChartData();
   const canvasEl = document.getElementById('wipeBarChart');
   const emptyEl = document.getElementById('wipeBarEmpty');
@@ -3325,10 +3363,9 @@ document.getElementById('showWipeBarBtn').addEventListener('click', function() {
 document.getElementById('wipeBarCloseBtn').addEventListener('click', function() {
   document.getElementById('wipeBarChartSection').style.display = 'none';
   document.getElementById('showWipeBarBtn').classList.remove('btn-active');
+  wipeBarCalMonth = null;
+  wipeBarSelectedDate = null;
   if (wipeBarChartInstance) { wipeBarChartInstance.destroy(); wipeBarChartInstance = null; }
-});
-document.getElementById('wipeBarDate').addEventListener('change', function() {
-  renderWipeBarChart();
 });
 
 document.getElementById('closeModalBtn').addEventListener('click', function() {
