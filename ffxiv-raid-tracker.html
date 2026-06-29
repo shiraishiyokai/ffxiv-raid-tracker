@@ -862,6 +862,7 @@ body.member-mode .captain-only { display: none !important; }
           <option value="progress">最远进度</option>
           <option value="totalTime">累计开荒时长</option>
           <option value="mistakes">犯错次数</option>
+          <option value="totalMistakes">总犯错次数</option>
         </select>
       </div>
       <div class="chart-control-group" id="overviewMemberFilter" style="display:none;">
@@ -2499,6 +2500,10 @@ function getChartDarkOptions(chartType, metric) {
     } else if (metric === 'totalTime') {
       opts.scales.y.ticks.callback = function(v) { return v + 'h'; };
       opts.plugins.tooltip.callbacks = { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + '小时'; } };
+    } else if (metric === 'totalMistakes') {
+      opts.scales.y.beginAtZero = true;
+      opts.scales.y.ticks.stepSize = 1;
+      opts.plugins.tooltip.callbacks = { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + '次'; } };
     }
   }
   if (chartType === 'wipeBar') {
@@ -2509,9 +2514,18 @@ function getChartDarkOptions(chartType, metric) {
 }
 
 function getOverviewChartData() {
-  const dates = Object.keys(state.days).sort();
   const metric = document.getElementById('overviewMetric').value;
-  const labels = dates.map(d => d.slice(5)); // MM-DD
+  let dates, labels;
+  // For progress metric, only include dates with fflogs data (skip rest days)
+  if (metric === 'progress') {
+    dates = Object.keys(state.days).sort().filter(d => {
+      const day = state.days[d];
+      return day.fflogs?.furthestPhase || day.furthestPhase;
+    });
+  } else {
+    dates = Object.keys(state.days).sort();
+  }
+  labels = dates.map(d => d.slice(5)); // MM-DD
   let datasets = [];
 
   if (metric === 'progress') {
@@ -2546,6 +2560,25 @@ function getOverviewChartData() {
       const data = dates.map(d => { const m = state.days[d].members[memberVal]; return m ? m.mistakes.reduce((s, m) => s + (m.count || 1), 0) : 0; });
       datasets = [{ label: ROLES[memberVal].label + ' 犯错次数', data, borderColor: roleColors[memberVal], backgroundColor: roleColors[memberVal] + '26', tension: 0.3, fill: true, pointBackgroundColor: roleColors[memberVal], pointRadius: 4 }];
     }
+  } else if (metric === 'totalMistakes') {
+    const roleColors = { MT:'#4169e1', ST:'#5b8def', H1:'#2ecc71', H2:'#5fd99a', D1:'#e74c3c', D2:'#f07070', D3:'#e67e22', D4:'#f5a623' };
+    for (const key of Object.keys(ROLES)) {
+      const data = dates.map(d => {
+        const m = state.days[d].members[key];
+        return m ? m.mistakes.reduce((s, m) => s + (m.count || 1), 0) : 0;
+      });
+      datasets.push({ label: ROLES[key].label, data, borderColor: roleColors[key], backgroundColor: 'transparent', tension: 0.2, pointRadius: 3, borderWidth: 2 });
+    }
+    // Total line (sum of all members)
+    const totalData = dates.map(d => {
+      let sum = 0;
+      for (const key of Object.keys(ROLES)) {
+        const m = state.days[d].members[key];
+        if (m) sum += m.mistakes.reduce((s, m) => s + (m.count || 1), 0);
+      }
+      return sum;
+    });
+    datasets.unshift({ label: '总计', data: totalData, borderColor: '#c9a44b', backgroundColor: 'rgba(201,164,75,0.1)', tension: 0.3, fill: true, pointBackgroundColor: '#c9a44b', pointRadius: 4, borderWidth: 3 });
   }
   return { labels, datasets };
 }
@@ -2575,7 +2608,8 @@ function renderOverviewChart() {
 }
 
 function updateOverviewMemberVisibility() {
-  document.getElementById('overviewMemberFilter').style.display = document.getElementById('overviewMetric').value === 'mistakes' ? '' : 'none';
+  const metric = document.getElementById('overviewMetric').value;
+  document.getElementById('overviewMemberFilter').style.display = metric === 'mistakes' ? '' : 'none';
 }
 
 function renderWipeBarCalendar() {
