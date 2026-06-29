@@ -2562,20 +2562,21 @@ function getOverviewChartData() {
     }
   } else if (metric === 'totalMistakes') {
     const roleColors = { MT:'#4169e1', ST:'#5b8def', H1:'#2ecc71', H2:'#5fd99a', D1:'#e74c3c', D2:'#f07070', D3:'#e67e22', D4:'#f5a623' };
+    const cumPerPerson = {};
     for (const key of Object.keys(ROLES)) {
+      let cum = 0;
       const data = dates.map(d => {
         const m = state.days[d].members[key];
-        return m ? m.mistakes.reduce((s, m) => s + (m.count || 1), 0) : 0;
+        cum += m ? m.mistakes.reduce((s, m) => s + (m.count || 1), 0) : 0;
+        return cum;
       });
+      cumPerPerson[key] = data;
       datasets.push({ label: ROLES[key].label, data, borderColor: roleColors[key], backgroundColor: 'transparent', tension: 0.2, pointRadius: 3, borderWidth: 2 });
     }
-    // Total line (sum of all members)
-    const totalData = dates.map(d => {
+    // Total line (cumulative sum of all members)
+    const totalData = dates.map((_, i) => {
       let sum = 0;
-      for (const key of Object.keys(ROLES)) {
-        const m = state.days[d].members[key];
-        if (m) sum += m.mistakes.reduce((s, m) => s + (m.count || 1), 0);
-      }
+      for (const key of Object.keys(ROLES)) sum += cumPerPerson[key][i];
       return sum;
     });
     datasets.unshift({ label: '总计', data: totalData, borderColor: '#c9a44b', backgroundColor: 'rgba(201,164,75,0.1)', tension: 0.3, fill: true, pointBackgroundColor: '#c9a44b', pointRadius: 4, borderWidth: 3 });
