@@ -1222,8 +1222,18 @@ async function syncToCloud() {
         if (getResp.ok) {
           const getData = await getResp.json();
           cloudFileSha = getData.sha;
-          const raw = decodeURIComponent(escape(atob(getData.content)));
-          mergeBase = JSON.parse(raw);
+          // Handle large files: Contents API may return empty content for >1MB files
+          if (!getData.content || getData.content === '') {
+            const blobResp = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/git/blobs/${getData.sha}`, { headers: githubHeaders(false) });
+            if (blobResp.ok) {
+              const blobData = await blobResp.json();
+              const raw = decodeURIComponent(escape(atob(blobData.content)));
+              mergeBase = JSON.parse(raw);
+            }
+          } else {
+            const raw = decodeURIComponent(escape(atob(getData.content)));
+            mergeBase = JSON.parse(raw);
+          }
         } else if (getResp.status !== 404) {
           cloudFetchFailed = true;
         }
@@ -1351,12 +1361,11 @@ async function syncToCloud() {
 }
 
 // 通过 GitHub API 读取文件内容（无论有无 token）
+// 对大文件使用 Git Blob API（Contents API 有 1MB 限制）
 async function fetchFromCloud(silent) {
   if (!state.teamId) return false;
-  // 已移除轮询冷却检查
 
   let content = null;
-
 
   // GitHub API 加上时间戳避免浏览器缓存返回旧数据
   try {
@@ -1368,13 +1377,25 @@ async function fetchFromCloud(silent) {
     clearTimeout(t);
     if (resp.ok) {
       const data = await resp.json();
-      // base64 解码（与上传编码对称：atob → escape → decodeURIComponent）
-      const raw = decodeURIComponent(escape(atob(data.content)));
-      content = JSON.parse(raw);
-      if (data.sha) cloudFileSha = data.sha; // 更新 SHA
-      // 读取成功
+      if (data.sha) cloudFileSha = data.sha;
+
+      // Contents API 对 >1MB 文件返回空 content，需用 Git Blob API
+      if (!data.content || data.content === '') {
+        console.log('[fetchFromCloud] 文件过大，使用 Git Blob API');
+        const blobResp = await fetch(`${GITHUB_API}/repos/${GITHUB_REPO}/git/blobs/${data.sha}`, { headers });
+        if (blobResp.ok) {
+          const blobData = await blobResp.json();
+          const raw = decodeURIComponent(escape(atob(blobData.content)));
+          content = JSON.parse(raw);
+        } else {
+          console.warn('[fetchFromCloud] Git Blob API 失败:', blobResp.status);
+        }
+      } else {
+        // base64 解码（与上传编码对称：atob → escape → decodeURIComponent）
+        const raw = decodeURIComponent(escape(atob(data.content)));
+        content = JSON.parse(raw);
+      }
     } else if (resp.status === 403) {
-      // 速率限制，等下次
       console.warn('[fetchFromCloud] GitHub API 速率限制');
     } else if (resp.status !== 404) {
       console.warn('[fetchFromCloud] GitHub API 错误:', resp.status);
